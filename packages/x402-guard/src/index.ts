@@ -174,3 +174,5 @@ export class CredaverAgentGuard {
     return createCredaverClientPolicy(this.mandate);
   }
 }
+
+export * from './constrained-signer.js';

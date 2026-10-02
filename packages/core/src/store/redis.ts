@@ -154,3 +154,5 @@ export class RedisStore implements ICredaverStore {
     return redisGet<SignedReceipt>(`credav:receipt:${receiptId}`, this.config);
   }
 }
+
+export { RedisStore as UpstashRedisStore };

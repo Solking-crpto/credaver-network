@@ -6,3 +6,4 @@ export * from './policy.js';
 export * from './receipt.js';
 export * from './store/index.js';
 export * from './store/redis.js';
+export * from './signer-service.js';
