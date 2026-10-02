@@ -1,0 +1,21 @@
+{
+  "name": "@credaver/demo-merchant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js",
+    "build": "tsc -b",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@credaver/core": "workspace:*",
+    "@credaver/x402-guard": "workspace:*",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  }
+}
