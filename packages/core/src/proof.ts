@@ -57,7 +57,7 @@ export interface ProofVerificationResult {
 /**
  * Verifies request-bound payment proof signature and schema
  */
-export function verifySignedPaymentProof(proof: unknown): ProofVerificationResult {
+export function verifySignedPaymentProof(proof: unknown, now: number = Date.now()): ProofVerificationResult {
   const parsed = SignedPaymentProofSchema.safeParse(proof);
   if (!parsed.success) {
     return {
@@ -67,7 +67,6 @@ export function verifySignedPaymentProof(proof: unknown): ProofVerificationResul
   }
 
   const p = parsed.data;
-  const now = Date.now();
   if (p.expiresAt < now) {
     return {
       isValid: false,

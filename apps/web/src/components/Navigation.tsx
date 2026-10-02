@@ -25,9 +25,17 @@ export const Navigation: React.FC = () => {
         {/* Brand Header with slot for drop-in logo */}
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 group">
-            {/* Logo Slot: checks for /brand/logo.png, falls back to styled cybernetic wordmark */}
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-credav-cyan via-credav-blue to-credav-violet flex items-center justify-center font-black text-credav-bg text-lg shadow-glow group-hover:scale-105 transition-transform">
-              C
+            {/* Logo Slot: checks for /brand/credaver-mark.png, falls back to styled cybernetic wordmark */}
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center font-black text-credav-bg text-lg shadow-glow group-hover:scale-105 transition-transform bg-gradient-to-tr from-credav-cyan via-credav-blue to-credav-violet">
+              {/* If credaver-mark.png exists, this img displays; on error it falls back to C */}
+              <img
+                src="/brand/credaver-mark.png"
+                alt="CredaVer"
+                className="w-full h-full object-cover hidden"
+                onLoad={(e) => (e.currentTarget.className = 'w-full h-full object-cover block')}
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+              <span className="select-none">C</span>
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-xl tracking-tight text-white group-hover:text-credav-cyan transition-colors">

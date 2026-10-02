@@ -42,6 +42,7 @@ export interface PolicyEvaluationResult {
 
 export interface EvaluatePolicyOptions {
   allowUnknownMerchantsForReview?: boolean;
+  evaluationTimestamp?: number;
 }
 
 /**
@@ -54,7 +55,7 @@ export async function evaluatePaymentPolicy(
   store: ICredaverStore,
   options?: EvaluatePolicyOptions
 ): Promise<PolicyEvaluationResult> {
-  const evaluatedAt = Date.now();
+  const evaluatedAt = options?.evaluationTimestamp ?? Date.now();
   const reasons: ReasonCodeType[] = [];
 
   // 1. Verify Mandate Cryptographic Integrity
@@ -86,7 +87,7 @@ export async function evaluatePaymentPolicy(
   }
 
   // 4. Verify Request-Bound Payment Proof Signature
-  const proofVerify = verifySignedPaymentProof(proof);
+  const proofVerify = verifySignedPaymentProof(proof, evaluatedAt);
   if (!proofVerify.isValid) {
     reasons.push(ReasonCode.INVALID_AGENT_PROOF_SIGNATURE);
   }
@@ -97,28 +98,29 @@ export async function evaluatePaymentPolicy(
   }
 
   // 6. Verify Agent Public Key Binding
-  if (proof.agentPubkey !== mandate.agentPubkey) {
+  if (proof.agentPubkey.trim() !== mandate.agentPubkey.trim()) {
     reasons.push(ReasonCode.AGENT_MISMATCH);
   }
 
   // 7. Verify Network Binding
-  if (proof.network !== mandate.network) {
+  if (proof.network.trim().toLowerCase() !== mandate.network.trim().toLowerCase()) {
     reasons.push(ReasonCode.NETWORK_MISMATCH);
   }
 
   // 8. Verify Asset Allowlist
+  const normalizedAsset = proof.asset.trim().toLowerCase();
   const isAssetAllowed =
     mandate.allowedAssets.includes('*') ||
-    mandate.allowedAssets.includes(proof.asset) ||
-    mandate.allowedAssets.map((a) => a.toLowerCase()).includes(proof.asset.toLowerCase());
+    mandate.allowedAssets.map((a) => a.trim().toLowerCase()).includes(normalizedAsset);
   if (!isAssetAllowed) {
     reasons.push(ReasonCode.ASSET_NOT_ALLOWED);
   }
 
   // 9. Verify Merchant Allowlist
+  const normalizedMerchant = proof.merchantPubkey.trim();
   const isMerchantAllowed =
     mandate.allowedMerchants.includes('*') ||
-    mandate.allowedMerchants.includes(proof.merchantPubkey);
+    mandate.allowedMerchants.map((m) => m.trim()).includes(normalizedMerchant);
 
   let reviewNeededForMerchant = false;
   if (!isMerchantAllowed) {

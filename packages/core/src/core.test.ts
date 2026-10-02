@@ -341,7 +341,461 @@ describe('S4 Crypto Core & JCS Canonicalization', () => {
       expect(result.decision).toBe('REVIEW');
       expect(result.reasonCodes).toContain(ReasonCode.UNKNOWN_MERCHANT_REQUIRES_REVIEW);
     });
-  });
+
+    // -------------------------------------------------------------------------
+    // Comprehensive 12-Gate & Boundary Audit Suite
+    // -------------------------------------------------------------------------
+    describe('Policy Audit: Exact 12-Gate Isolation & Boundary Conditions', () => {
+      const fixedNow = 1760000000000; // Fixed deterministic timestamp
+
+      const boundaryMandateCore: MandateCore = {
+        mandateId: 'mandate-boundary-01',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: ['MerchantApproved111111111111111111111111111'],
+        allowedAssets: ['USDC'],
+        maxPerTx: '2000000', // 2 USDC
+        totalCap: '10000000', // 10 USDC
+        reviewThreshold: '1500000', // 1.5 USDC
+        validFrom: fixedNow,
+        expiresAt: fixedNow + 3600000,
+        nonce: 'boundary-mandate-nonce',
+        network: 'solana:devnet',
+      };
+
+      it('Gate 1: INVALID_MANDATE_INTEGRITY — rejects mandate with tampered signature', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const badMandate = { ...mandate, operatorSignature: '1'.repeat(64) };
+        const proof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g1-nonce',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+
+        const res = await evaluatePaymentPolicy(badMandate, proof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(res.decision).toBe('DENY');
+        expect(res.reasonCodes).toContain(ReasonCode.INVALID_MANDATE_INTEGRITY);
+      });
+
+      it('Gate 2: REVOKED_MANDATE — rejects revoked mandate', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        mandate.revoked = true;
+        const proof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g2-nonce',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+
+        const res = await evaluatePaymentPolicy(mandate, proof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(res.decision).toBe('DENY');
+        expect(res.reasonCodes).toContain(ReasonCode.REVOKED_MANDATE);
+      });
+
+      it('Gate 3: MANDATE_NOT_YET_VALID & Boundary — exactly validFrom passes, 1ms before fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+
+        const makeProof = (nonce: string) =>
+          createSignedPaymentProof(
+            {
+              mandateHash: mandate.mandateHash,
+              agentPubkey: agent.publicKey,
+              merchantPubkey: 'MerchantApproved111111111111111111111111111',
+              asset: 'USDC',
+              amount: '1000000',
+              audience: 'https://api.test',
+              network: 'solana:devnet',
+              nonce,
+              timestamp: fixedNow,
+              expiresAt: fixedNow + 60000,
+            },
+            agent.secretKey
+          );
+
+        // Boundary A: exactly at validFrom -> PASS
+        const resExact = await evaluatePaymentPolicy(mandate, makeProof('nonce-g3-pass'), store, {
+          evaluationTimestamp: boundaryMandateCore.validFrom,
+        });
+        expect(resExact.decision).toBe('ALLOW');
+
+        // Boundary B: 1ms before validFrom -> FAIL
+        const resBefore = await evaluatePaymentPolicy(mandate, makeProof('nonce-g3-fail'), store, {
+          evaluationTimestamp: boundaryMandateCore.validFrom - 1,
+        });
+        expect(resBefore.decision).toBe('DENY');
+        expect(resBefore.reasonCodes).toContain(ReasonCode.MANDATE_NOT_YET_VALID);
+      });
+
+      it('Gate 4: EXPIRED_MANDATE & Boundary — exactly at expiresAt passes, 1ms after fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+
+        const makeProof = (nonce: string) =>
+          createSignedPaymentProof(
+            {
+              mandateHash: mandate.mandateHash,
+              agentPubkey: agent.publicKey,
+              merchantPubkey: 'MerchantApproved111111111111111111111111111',
+              asset: 'USDC',
+              amount: '1000000',
+              audience: 'https://api.test',
+              network: 'solana:devnet',
+              nonce,
+              timestamp: fixedNow + 1000,
+              expiresAt: boundaryMandateCore.expiresAt + 10000,
+            },
+            agent.secretKey
+          );
+
+        // Boundary A: exactly at expiresAt -> PASS
+        const resExact = await evaluatePaymentPolicy(mandate, makeProof('nonce-g4-pass'), store, {
+          evaluationTimestamp: boundaryMandateCore.expiresAt,
+        });
+        expect(resExact.decision).toBe('ALLOW');
+
+        // Boundary B: 1ms after expiresAt -> FAIL
+        const resAfter = await evaluatePaymentPolicy(mandate, makeProof('nonce-g4-fail'), store, {
+          evaluationTimestamp: boundaryMandateCore.expiresAt + 1,
+        });
+        expect(resAfter.decision).toBe('DENY');
+        expect(resAfter.reasonCodes).toContain(ReasonCode.EXPIRED_MANDATE);
+      });
+
+      it('Gate 5: INVALID_AGENT_PROOF_SIGNATURE — rejects proof with corrupted signature', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const proof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g5-nonce',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+
+        const corruptedProof = { ...proof, signature: 'A'.repeat(64) };
+        const res = await evaluatePaymentPolicy(mandate, corruptedProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(res.decision).toBe('DENY');
+        expect(res.reasonCodes).toContain(ReasonCode.INVALID_AGENT_PROOF_SIGNATURE);
+      });
+
+      it('Gate 6: AGENT_MISMATCH — rejects proof when agent pubkey differs from mandate binding', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const imposterAgent = generateEd25519Keypair();
+
+        const proof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: imposterAgent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g6-nonce',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          imposterAgent.secretKey
+        );
+
+        const res = await evaluatePaymentPolicy(mandate, proof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(res.decision).toBe('DENY');
+        expect(res.reasonCodes).toContain(ReasonCode.AGENT_MISMATCH);
+      });
+
+      it('Gate 7: NETWORK_MISMATCH — rejects proof when network differs from mandate', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const proof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:mainnet-beta', // Mainnet attempt on Devnet mandate
+            nonce: 'g7-nonce',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+
+        const res = await evaluatePaymentPolicy(mandate, proof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(res.decision).toBe('DENY');
+        expect(res.reasonCodes).toContain(ReasonCode.NETWORK_MISMATCH);
+      });
+
+      it('Gate 8: ASSET_NOT_ALLOWED & Normalization — case-insensitive match passes, unknown asset fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+
+        // Case-insensitivity check: "usdc" matches "USDC"
+        const normalizedProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'usdc', // Lowercase
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g8-norm-pass',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resPass = await evaluatePaymentPolicy(mandate, normalizedProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resPass.decision).toBe('ALLOW');
+
+        // Disallowed asset
+        const badAssetProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'SHIB_TOKEN_MINT',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'nonce-g8-fail',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resFail = await evaluatePaymentPolicy(mandate, badAssetProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resFail.decision).toBe('DENY');
+        expect(resFail.reasonCodes).toContain(ReasonCode.ASSET_NOT_ALLOWED);
+      });
+
+      it('Gate 9: MERCHANT_NOT_ALLOWED & Normalization — whitespace trimmed merchant passes, unknown fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+
+        // Whitespace trimmed check
+        const trimmedProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: '  MerchantApproved111111111111111111111111111  ',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g9-trim-pass',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resPass = await evaluatePaymentPolicy(mandate, trimmedProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resPass.decision).toBe('ALLOW');
+
+        // Unapproved merchant without review mode
+        const unapprovedProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'UnknownRandoMerchant9999999999999999999999',
+            asset: 'USDC',
+            amount: '1000000',
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'nonce-g9-fail',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resFail = await evaluatePaymentPolicy(mandate, unapprovedProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resFail.decision).toBe('DENY');
+        expect(resFail.reasonCodes).toContain(ReasonCode.MERCHANT_NOT_ALLOWED);
+      });
+
+      it('Gate 10: AMOUNT_EXCEEDS_PER_TX_LIMIT & Boundary — exactly at maxPerTx passes, exactly +1n fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const maxPerTxBig = BigInt(boundaryMandateCore.maxPerTx); // 2,000,000
+
+        // Boundary A: exactly at maxPerTx -> PASS
+        const exactProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: maxPerTxBig.toString(), // 2,000,000
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g10-exact-pass',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resExact = await evaluatePaymentPolicy(mandate, exactProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        // Triggers review because maxPerTx (2.0) >= reviewThreshold (1.5), but NOT per-tx limit denial!
+        expect(resExact.decision).toBe('REVIEW');
+        expect(resExact.reasonCodes).not.toContain(ReasonCode.AMOUNT_EXCEEDS_PER_TX_LIMIT);
+
+        // Boundary B: exactly +1n over maxPerTx -> FAIL
+        const overProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: (maxPerTxBig + 1n).toString(), // 2,000,001
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g10-over-fail',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resOver = await evaluatePaymentPolicy(mandate, overProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resOver.decision).toBe('DENY');
+        expect(resOver.reasonCodes).toContain(ReasonCode.AMOUNT_EXCEEDS_PER_TX_LIMIT);
+      });
+
+      it('Gate 11: AMOUNT_EXCEEDS_TOTAL_CAP & Boundary — cumulative spend exactly at totalCap passes, +1n fails', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const totalCapBig = BigInt(boundaryMandateCore.totalCap); // 10,000,000
+        const currentSpend = 9000000n; // 9 USDC spent
+        await store.recordMandateSpend(mandate.mandateId, currentSpend);
+
+        // Boundary A: current (9M) + request (1M) == totalCap (10M) -> PASS (ALLOW)
+        const exactCapProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000000', // 1 USDC (< reviewThreshold 1.5M)
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g11-exact-cap-pass',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resExact = await evaluatePaymentPolicy(mandate, exactCapProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resExact.decision).toBe('ALLOW');
+        expect(resExact.reasonCodes).toContain(ReasonCode.POLICY_PASSED_ALL_GATES);
+
+        // Boundary B: current (9M) + request (1,000,001) > totalCap -> FAIL (DENY)
+        const overCapProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: '1000001', // 1,000,001
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'g11-over-cap-fail',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resOver = await evaluatePaymentPolicy(mandate, overCapProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resOver.decision).toBe('DENY');
+        expect(resOver.reasonCodes).toContain(ReasonCode.AMOUNT_EXCEEDS_TOTAL_CAP);
+      });
+
+      it('Review Boundary: amount === reviewThreshold triggers REVIEW, amount === reviewThreshold - 1n allows', async () => {
+        const mandate = issueSignedMandate(boundaryMandateCore, operator.secretKey, agent.secretKey);
+        const reviewThreshBig = BigInt(boundaryMandateCore.reviewThreshold!); // 1,500,000
+
+        // Boundary A: exactly at reviewThreshold -> REVIEW
+        const exactReviewProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: reviewThreshBig.toString(), // 1,500,000
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'rev-exact-trigger',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resExact = await evaluatePaymentPolicy(mandate, exactReviewProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resExact.decision).toBe('REVIEW');
+        expect(resExact.reasonCodes).toContain(ReasonCode.HIGH_VALUE_TRANSACTION_REQUIRES_REVIEW);
+
+        // Boundary B: exactly 1 unit below reviewThreshold -> ALLOW
+        const belowReviewProof = createSignedPaymentProof(
+          {
+            mandateHash: mandate.mandateHash,
+            agentPubkey: agent.publicKey,
+            merchantPubkey: 'MerchantApproved111111111111111111111111111',
+            asset: 'USDC',
+            amount: (reviewThreshBig - 1n).toString(), // 1,499,999
+            audience: 'https://api.test',
+            network: 'solana:devnet',
+            nonce: 'rev-below-allow',
+            timestamp: fixedNow + 1000,
+            expiresAt: fixedNow + 60000,
+          },
+          agent.secretKey
+        );
+        const resBelow = await evaluatePaymentPolicy(mandate, belowReviewProof, store, { evaluationTimestamp: fixedNow + 1000 });
+        expect(resBelow.decision).toBe('ALLOW');
+        expect(resBelow.reasonCodes).toContain(ReasonCode.POLICY_PASSED_ALL_GATES);
+      });
+
+      it('Money Integrity: rejects floating point and decimal amount strings', () => {
+        expect(() =>
+          createSignedPaymentProof(
+            {
+              mandateHash: 'a'.repeat(64),
+              agentPubkey: agent.publicKey,
+              merchantPubkey: 'MerchantApproved111111111111111111111111111',
+              asset: 'USDC',
+              amount: '1.50', // Float rejected
+              audience: 'https://api.test',
+              network: 'solana:devnet',
+              nonce: 'float-nonce',
+              timestamp: fixedNow,
+              expiresAt: fixedNow + 60000,
+            },
+            agent.secretKey
+          )
+        ).toThrow('amount must be a positive integer in base units');
+      });
+    });
+
 
   describe('6. Nonce Replay & Atomic Race Protection (Item 2 Adaptation)', () => {
     it('rejects sequential replay with the same nonce', async () => {
@@ -503,4 +957,5 @@ describe('S4 Crypto Core & JCS Canonicalization', () => {
       expect(verification.error).toContain('Receipt hash mismatch');
     });
   });
+});
 });

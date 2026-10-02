@@ -17,6 +17,9 @@ out/
 *.key
 *.pem
 *.id.json
+*.secret.json
+*.payer.json
+.devnet-*.json
 devnet-keypair*.json
 keys/
 

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #050711;
+  --background: #03050d;
   --foreground: #f1f5f9;
 }
 
@@ -16,17 +16,17 @@ body {
 
 /* CredaVer Glow and Glass Effects */
 .glass-panel {
-  background: rgba(10, 14, 36, 0.7);
+  background: rgba(10, 15, 34, 0.75);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(26, 35, 82, 0.8);
+  border: 1px solid rgba(22, 32, 68, 0.8);
 }
 
 .glass-panel:hover {
-  border-color: rgba(0, 242, 254, 0.3);
+  border-color: rgba(0, 216, 255, 0.3);
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #7f00ff 100%);
+  background: linear-gradient(135deg, #00d8ff 0%, #0a64ff 50%, #8a3dff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

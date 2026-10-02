@@ -1,0 +1,18 @@
+{
+  "name": "CredaVer Network Brand Tokens",
+  "colors": {
+    "bg": "#03050d",
+    "surface": "#0a0f22",
+    "card": "#0c132c",
+    "border": "#162044",
+    "cyan": "#00d8ff",
+    "blue": "#0a64ff",
+    "violet": "#8a3dff",
+    "magenta": "#c04bff",
+    "muted": "#7e8fa6"
+  },
+  "gradients": {
+    "primary": "linear-gradient(135deg, #00d8ff 0%, #0a64ff 50%, #8a3dff 100%)",
+    "accent": "linear-gradient(135deg, #00d8ff 0%, #c04bff 100%)"
+  }
+}
