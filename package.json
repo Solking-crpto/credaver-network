@@ -9,6 +9,7 @@
     "test:watch": "vitest",
     "lint": "pnpm -r --if-present run lint",
     "typecheck": "tsc --noEmit",
+    "generate-deploy-keys": "tsx scripts/generate-deploy-keys.ts",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
   },

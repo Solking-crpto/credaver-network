@@ -11,15 +11,22 @@ This document details the configuration, required environment variables, and pre
 
 When running in `NODE_ENV=production`, the application strictly enforces the presence of multi-instance persistence credentials. Silent fallback to in-memory storage is disabled.
 
-| Variable Name | Required | Default / Example | Purpose |
+| Variable Name | Required | Encoding / Format | Purpose |
 |---|---|---|---|
-| `NODE_ENV` | Yes | `production` | Enables production optimizations and disables silent in-memory fallback. |
-| `UPSTASH_REDIS_REST_URL` | **Yes (in prod)** | `https://xxxx.upstash.io` | Upstash Redis REST endpoint for atomic `SET NX EX` replay protection and persistence. |
-| `UPSTASH_REDIS_REST_TOKEN` | **Yes (in prod)** | `AXxx...` | Upstash Redis REST bearer token. |
-| `DEVNET_PAYMENT_SECRET_KEY` | Optional | Base58 encoded 64-byte Ed25519 key | The Solana funding wallet private key held in custody by the CredaVer signer. If omitted, falls back to local throwaway key. |
-| `SOLANA_RPC_URL` | Optional | `https://api.devnet.solana.com` | Solana JSON-RPC endpoint for on-chain memo extraction and slot verification. |
-| `OFFICIAL_FACILITATOR_URL` | Optional | `https://x402.org/facilitator` | x402 public facilitator endpoint for Solana settlement. |
-| `ANCHOR_ON_CHAIN` | Optional | `false` | When `true`, automatically broadcasts SPL Memo transactions to Solana devnet on every `ALLOW` decision. |
+| `NODE_ENV` | Yes | String (`production`) | Enables production optimizations and disables silent in-memory fallback. |
+| `UPSTASH_REDIS_REST_URL` | **Yes (in prod)** | URL string | Upstash Redis REST endpoint for atomic `SET NX EX` replay protection and persistence. |
+| `UPSTASH_REDIS_REST_TOKEN` | **Yes (in prod)** | Token string | Upstash Redis REST bearer token. |
+| `DEVNET_PAYMENT_SECRET_KEY` | Optional (Prod) | Base58 string or JSON array | Solana funding wallet private key held in custody by the CredaVer signer. If omitted, falls back to local throwaway key. |
+| `DEVNET_PAYMENT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Public address of the funding wallet (auto-derived if omitted). |
+| `RECEIPT_AUTHORITY_SECRET_KEY` | Optional | Base58 string or JSON array | Ed25519 private key used to sign canonical RFC 8785 receipts. Falls back to payment key if omitted. |
+| `RECEIPT_AUTHORITY_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Public key of the receipt signing authority (auto-derived if omitted). |
+| `ANCHOR_PAYER_SECRET_KEY` | Optional | Base58 string or JSON array | Solana devnet payer key used to broadcast SPL Memo anchor transactions. Falls back to payment key if omitted. |
+| `ANCHOR_PAYER_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Public address of the anchor fee payer (auto-derived if omitted). |
+| `DEVNET_MERCHANT_SECRET_KEY` | Optional | Base58 string or JSON array | Demo merchant private key used for x402 resource server settlement. |
+| `DEVNET_MERCHANT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Demo merchant destination address for x402 payments. |
+| `SOLANA_RPC_URL` | Optional | URL string | Solana JSON-RPC endpoint for on-chain memo extraction and slot verification. |
+| `OFFICIAL_FACILITATOR_URL` | Optional | URL string | x402 public facilitator endpoint for Solana settlement (`https://x402.org/facilitator`). |
+| `ANCHOR_ON_CHAIN` | Optional | Boolean string (`true`/`false`) | When `true`, automatically broadcasts SPL Memo transactions to Solana devnet on every `ALLOW` decision. |
 
 ---
 

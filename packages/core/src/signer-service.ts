@@ -47,6 +47,8 @@ export interface EvaluateAndSignOptions {
   payerPubkey?: string;
   authoritySecretKey?: Uint8Array | string;
   authorityPubkey?: string;
+  anchorSecretKey?: Uint8Array | string;
+  anchorPubkey?: string;
   now?: number;
   anchorOnChain?: boolean;
   rpcUrl?: string;
@@ -118,12 +120,14 @@ export async function evaluateAndSignTransaction(
     const signature = encodeBase58(signatureBytes);
 
     // Optional on-chain SPL memo anchoring
-    if (options.anchorOnChain && options.payerPubkey) {
+    if (options.anchorOnChain && (options.anchorPubkey || options.payerPubkey)) {
       try {
+        const anchorPayerPub = options.anchorPubkey ?? options.payerPubkey!;
+        const anchorPayerSecret = options.anchorSecretKey ?? options.paymentSecretKey;
         const anchorRes = await anchorReceiptOnChain(
           signedReceipt,
-          options.payerPubkey,
-          options.paymentSecretKey,
+          anchorPayerPub,
+          anchorPayerSecret,
           options.rpcUrl
         );
         signedReceipt.onChainTxSignature = anchorRes.txSignature;

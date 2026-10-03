@@ -4,7 +4,13 @@ import {
   evaluateAndSignTransaction,
   SignedMandateSchema,
 } from '@credaver/core';
-import { getServerStore, getServerPaymentKey, getServerPayerKeypair } from '../../../lib/server-state';
+import {
+  getServerStore,
+  getServerPaymentKey,
+  getServerPayerKeypair,
+  getServerReceiptAuthorityKeypair,
+  getServerAnchorKeypair,
+} from '../../../lib/server-state';
 import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
 
 export async function POST(req: NextRequest) {
@@ -68,6 +74,8 @@ export async function POST(req: NextRequest) {
     }
 
     const payerKeypair = getServerPayerKeypair();
+    const authorityKeypair = getServerReceiptAuthorityKeypair();
+    const anchorKeypair = getServerAnchorKeypair();
     const shouldAnchor =
       req.nextUrl.searchParams.get('anchor') === 'true' ||
       process.env.ANCHOR_ON_CHAIN === 'true';
@@ -79,6 +87,10 @@ export async function POST(req: NextRequest) {
       store,
       paymentSecretKey: payerKeypair.secretKey,
       payerPubkey: payerKeypair.publicKey,
+      authoritySecretKey: authorityKeypair.secretKey,
+      authorityPubkey: authorityKeypair.publicKey,
+      anchorSecretKey: anchorKeypair.secretKey,
+      anchorPubkey: anchorKeypair.publicKey,
       anchorOnChain: shouldAnchor,
     });
 
