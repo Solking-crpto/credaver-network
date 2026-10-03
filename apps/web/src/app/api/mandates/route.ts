@@ -27,12 +27,12 @@ export async function POST(req: NextRequest) {
     const mandate = parseResult.data;
 
     // Verify mutual Ed25519 signatures
-    const isValid = verifySignedMandate(mandate);
-    if (!isValid) {
+    const verification = verifySignedMandate(mandate);
+    if (!verification.isValid) {
       return NextResponse.json(
         {
           error: 'INVALID_MANDATE_SIGNATURES',
-          message: 'Operator or Agent signature verification failed',
+          message: verification.error || 'Operator or Agent signature verification failed',
         },
         { status: 400 }
       );

@@ -9,6 +9,9 @@ import {
   generateEd25519Keypair,
   issueSignedMandate,
   issueSignedReceipt,
+  computeMandateHash,
+  getMandateSigningBytes,
+  signEd25519,
   ReasonCode,
 } from '@credaver/core';
 import { getServerStore } from './lib/server-state';
@@ -190,5 +193,151 @@ describe('apps/web: Mandates & Receipts REST API Endpoints', () => {
     const detailData = await detailRes.json();
     expect(detailData.receipt.receiptId).toBe('receipt-api-test-1');
     expect(detailData.receipt.decision).toBe('ALLOW');
+  });
+
+  it('5. POST /api/mandates accepts mandate signed with readable CredaVer Mandate v1 prefix', async () => {
+    const core = {
+      mandateId: 'mandate-readable-prefix-1',
+      operatorPubkey: operator.publicKey,
+      agentPubkey: agent.publicKey,
+      allowedMerchants: ['*'],
+      allowedAssets: [USDC_ASSET],
+      maxPerTx: '1000000',
+      totalCap: '5000000',
+      validFrom: Date.now() - 1000,
+      expiresAt: Date.now() + 3600000,
+      nonce: `nonce-read-${Date.now()}`,
+      network: NETWORK,
+    };
+    const mandateHash = computeMandateHash(core);
+    const signBytes = getMandateSigningBytes(core);
+    const operatorSignature = signEd25519(signBytes, operator.secretKey);
+    const agentCounterSignature = signEd25519(signBytes, agent.secretKey);
+
+    const validMandate = {
+      ...core,
+      mandateHash,
+      operatorSignature,
+      agentCounterSignature,
+      revoked: false,
+    };
+
+    const req = new NextRequest('http://localhost:3000/api/mandates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validMandate),
+    });
+
+    const res = await createMandateRoute(req);
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.mandate.mandateId).toBe('mandate-readable-prefix-1');
+  });
+
+  it('6. POST /api/mandates rejects wrong signer (imposter operator key)', async () => {
+    const imposter = generateEd25519Keypair();
+    const core = {
+      mandateId: 'mandate-imposter-test',
+      operatorPubkey: operator.publicKey, // claims to be operator
+      agentPubkey: agent.publicKey,
+      allowedMerchants: ['*'],
+      allowedAssets: [USDC_ASSET],
+      maxPerTx: '1000000',
+      totalCap: '5000000',
+      validFrom: Date.now() - 1000,
+      expiresAt: Date.now() + 3600000,
+      nonce: `nonce-imposter-${Date.now()}`,
+      network: NETWORK,
+    };
+    const mandateHash = computeMandateHash(core);
+    const signBytes = getMandateSigningBytes(core);
+    // Imposter signs instead of operator
+    const invalidOperatorSig = signEd25519(signBytes, imposter.secretKey);
+    const agentCounterSignature = signEd25519(signBytes, agent.secretKey);
+
+    const imposterMandate = {
+      ...core,
+      mandateHash,
+      operatorSignature: invalidOperatorSig,
+      agentCounterSignature,
+      revoked: false,
+    };
+
+    const req = new NextRequest('http://localhost:3000/api/mandates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(imposterMandate),
+    });
+
+    const res = await createMandateRoute(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('INVALID_MANDATE_SIGNATURES');
+  });
+
+  it('7. POST /api/mandates rejects tampered fields (e.g. modified totalCap or mandateHash)', async () => {
+    const core = {
+      mandateId: 'mandate-tamper-test',
+      operatorPubkey: operator.publicKey,
+      agentPubkey: agent.publicKey,
+      allowedMerchants: ['*'],
+      allowedAssets: [USDC_ASSET],
+      maxPerTx: '1000000',
+      totalCap: '5000000',
+      validFrom: Date.now() - 1000,
+      expiresAt: Date.now() + 3600000,
+      nonce: `nonce-tamper-${Date.now()}`,
+      network: NETWORK,
+    };
+    const mandateHash = computeMandateHash(core);
+    const signBytes = getMandateSigningBytes(core);
+    const operatorSignature = signEd25519(signBytes, operator.secretKey);
+    const agentCounterSignature = signEd25519(signBytes, agent.secretKey);
+
+    // Case 7a: totalCap tampered from 5,000,000 to 999,999,999 without updating hash
+    const tamperedCoreMandate = {
+      ...core,
+      totalCap: '999999999',
+      mandateHash,
+      operatorSignature,
+      agentCounterSignature,
+      revoked: false,
+    };
+
+    const reqA = new NextRequest('http://localhost:3000/api/mandates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tamperedCoreMandate),
+    });
+
+    const resA = await createMandateRoute(reqA);
+    expect(resA.status).toBe(400);
+    const dataA = await resA.json();
+    expect(dataA.error).toBe('INVALID_MANDATE_SIGNATURES');
+    expect(dataA.message).toContain('Mandate hash mismatch');
+
+    // Case 7b: Attacker updates hash to match tampered totalCap, but signature is now invalid
+    const tamperedCore = { ...core, totalCap: '999999999' };
+    const forgedHash = computeMandateHash(tamperedCore);
+    const tamperedHashMandate = {
+      ...tamperedCore,
+      mandateHash: forgedHash,
+      operatorSignature, // Old signature over original core!
+      agentCounterSignature,
+      revoked: false,
+    };
+
+    const reqB = new NextRequest('http://localhost:3000/api/mandates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tamperedHashMandate),
+    });
+
+    const resB = await createMandateRoute(reqB);
+    expect(resB.status).toBe(400);
+    const dataB = await resB.json();
+    expect(dataB.error).toBe('INVALID_MANDATE_SIGNATURES');
+    expect(dataB.message).toContain('Invalid operator signature');
   });
 });

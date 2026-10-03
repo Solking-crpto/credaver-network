@@ -155,4 +155,26 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     expect(rejectData.decision).toBe('DENY');
     expect(rejectData.reasonCodes).toContain(ReasonCode.OPERATOR_REJECTED);
   });
+
+  it('9. Scenario REAL_DEVNET: validates scenario enum and returns structured response or graceful fallback', async () => {
+    const req = new NextRequest('http://localhost:3000/api/scenarios', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '127.0.0.99' },
+      body: JSON.stringify({ scenario: 'REAL_DEVNET' }),
+    });
+    const res = await scenarioPostRoute(req);
+    // Either 200 (live settlement executed) or 503 (graceful facilitator / devnet funds notice)
+    expect([200, 503]).toContain(res.status);
+    const data = await res.json();
+    if (res.status === 200) {
+      expect(data.scenario).toBe('REAL_DEVNET');
+      expect(data.decision).toBe('ALLOW');
+      expect(data.txSignature).toBeDefined();
+      expect(data.explorerUrl).toContain('https://explorer.solana.com/tx/');
+    } else {
+      expect(['FACILITATOR_UNAVAILABLE', 'INSUFFICIENT_DEVNET_FUNDS']).toContain(data.error);
+      expect(data.message).toBeDefined();
+    }
+  }, 30000);
 });
+

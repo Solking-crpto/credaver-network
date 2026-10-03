@@ -1,0 +1,273 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { x402Client } from '@x402/core/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { ExactSvmScheme } from '@x402/svm';
+import {
+  createDemoMerchantApp,
+  OFFICIAL_FACILITATOR_URL,
+  SOLANA_DEVNET_GENESIS,
+  DEVNET_USDC_MINT,
+  MERCHANT_WALLET,
+} from '@credaver/demo-merchant';
+import {
+  generateEd25519Keypair,
+  issueSignedMandate,
+  evaluateAndSignTransaction,
+  SignedReceipt,
+  SignedMandate,
+} from '@credaver/core';
+import {
+  CredaverConstrainedSigner,
+  createCredaverClientPolicy,
+} from '@credaver/x402-guard';
+import {
+  getServerStore,
+  getServerPayerKeypair,
+  getServerReceiptAuthorityKeypair,
+  getServerAnchorKeypair,
+} from './server-state';
+
+export interface DevnetCheckResult {
+  ok: boolean;
+  solBalanceLamports?: number;
+  usdcBalanceBaseUnits?: number;
+  payerPubkey: string;
+  error?: string;
+  explorerUrl: string;
+}
+
+export async function checkDevnetPayerBalance(): Promise<DevnetCheckResult> {
+  const payerKeypair = getServerPayerKeypair();
+  const explorerUrl = `https://explorer.solana.com/address/${payerKeypair.publicKey}?cluster=devnet`;
+  const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    const solRes = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBalance',
+        params: [payerKeypair.publicKey],
+      }),
+      signal: controller.signal,
+    });
+    const solData = await solRes.json();
+    const solBalanceLamports = solData?.result?.value ?? 0;
+
+    const tokenRes = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'getTokenAccountsByOwner',
+        params: [
+          payerKeypair.publicKey,
+          { mint: DEVNET_USDC_MINT },
+          { encoding: 'jsonParsed' },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const tokenData = await tokenRes.json();
+    const accounts = tokenData?.result?.value || [];
+    let usdcBalanceBaseUnits = 0;
+    if (accounts.length > 0) {
+      usdcBalanceBaseUnits = Number(
+        accounts[0].account?.data?.parsed?.info?.tokenAmount?.amount || '0'
+      );
+    }
+
+    if (usdcBalanceBaseUnits < 1000000) {
+      return {
+        ok: false,
+        solBalanceLamports,
+        usdcBalanceBaseUnits,
+        payerPubkey: payerKeypair.publicKey,
+        error: `Insufficient devnet USDC balance (${(usdcBalanceBaseUnits / 1e6).toFixed(2)} USDC available, 1.00 USDC required).`,
+        explorerUrl,
+      };
+    }
+
+    return {
+      ok: true,
+      solBalanceLamports,
+      usdcBalanceBaseUnits,
+      payerPubkey: payerKeypair.publicKey,
+      explorerUrl,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      payerPubkey: payerKeypair.publicKey,
+      error: `Devnet RPC balance check failed: ${err.message}`,
+      explorerUrl,
+    };
+  }
+}
+
+export async function checkFacilitatorHealth(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`${OFFICIAL_FACILITATOR_URL}/supported`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Public x402 facilitator at ${OFFICIAL_FACILITATOR_URL} returned HTTP ${res.status}`,
+      };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: `Public x402 facilitator at ${OFFICIAL_FACILITATOR_URL} unreachable: ${err.message}`,
+    };
+  }
+}
+
+export interface RealPaymentExecutionResult {
+  success: boolean;
+  txSignature: string;
+  explorerUrl: string;
+  latencyMs: number;
+  mandate: SignedMandate;
+  receipt?: SignedReceipt;
+  resourceData?: any;
+  payerPubkey: string;
+  merchantPubkey: string;
+}
+
+export async function executeRealDevnetPayment(): Promise<RealPaymentExecutionResult> {
+  const startTime = Date.now();
+  const payerKeypair = getServerPayerKeypair();
+  const authorityKeypair = getServerReceiptAuthorityKeypair();
+  const anchorKeypair = getServerAnchorKeypair();
+  const store = getServerStore();
+  const merchantWallet = process.env.MERCHANT_WALLET || MERCHANT_WALLET;
+
+  // 1. Initialize demo merchant Express app synced with official facilitator
+  const app = await createDemoMerchantApp({
+    useOfficialResourceServer: true,
+    facilitatorUrl: OFFICIAL_FACILITATOR_URL,
+  });
+
+  const server = createServer(app);
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+
+  const addr = server.address() as AddressInfo;
+  const merchantUrl = `http://127.0.0.1:${addr.port}`;
+
+  try {
+    // 2. Generate Operator & Agent Keys
+    const operator = generateEd25519Keypair();
+    const agent = generateEd25519Keypair(); // Identity only
+
+    // 3. Issue Mandate with $2 limit, $10 cap
+    const mandate = issueSignedMandate(
+      {
+        mandateId: `mandate-real-devnet-${Date.now()}`,
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: [merchantWallet],
+        allowedAssets: [DEVNET_USDC_MINT],
+        maxPerTx: '2000000', // 2 USDC max
+        totalCap: '10000000', // 10 USDC total cap
+        validFrom: Date.now() - 5000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-${Date.now()}-real`,
+        network: SOLANA_DEVNET_GENESIS,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+
+    let capturedReceipt: SignedReceipt | undefined;
+
+    // 4. Initialize CredaverConstrainedSigner
+    const constrainedSigner = new CredaverConstrainedSigner({
+      fundingAddress: payerKeypair.publicKey,
+      mandate,
+      agentSecretKey: agent.secretKey, // Identity key ONLY!
+      localSignerDelegate: async (params) => {
+        const signResult = await evaluateAndSignTransaction({
+          mandate: params.mandate,
+          proof: params.proof,
+          transactionMessageBytes: params.transactionMessageBytes,
+          store,
+          paymentSecretKey: payerKeypair.secretKey,
+          payerPubkey: payerKeypair.publicKey,
+          authoritySecretKey: authorityKeypair.secretKey,
+          authorityPubkey: authorityKeypair.publicKey,
+          anchorSecretKey: anchorKeypair.secretKey,
+          anchorPubkey: anchorKeypair.publicKey,
+          anchorOnChain: false,
+        });
+
+        capturedReceipt = signResult.receipt;
+        return signResult;
+      },
+    });
+
+    constrainedSigner.setContext({
+      merchantPubkey: merchantWallet,
+      asset: DEVNET_USDC_MINT,
+      amount: '1000000', // 1 USDC
+      audience: `${merchantUrl}/api/weather`,
+    });
+
+    // 5. Register in x402 client and execute payment
+    const client = new x402Client();
+    client.register(SOLANA_DEVNET_GENESIS, new ExactSvmScheme(constrainedSigner as any));
+    client.registerPolicy(createCredaverClientPolicy(mandate));
+
+    const payingFetch = wrapFetchWithPayment(fetch, client);
+    const response = await payingFetch(`${merchantUrl}/api/weather`);
+
+    let txSignature = '';
+    const paymentResponseHeader = response.headers.get('payment-response');
+    if (paymentResponseHeader) {
+      const decodedPaymentResp = Buffer.from(paymentResponseHeader, 'base64').toString('utf8');
+      try {
+        const parsedResp = JSON.parse(decodedPaymentResp);
+        txSignature = parsedResp.txSignature || parsedResp.transaction || '';
+      } catch {
+        // ignore
+      }
+    }
+
+    const responseBody = await response.json();
+    const latencyMs = Date.now() - startTime;
+    const explorerUrl = txSignature
+      ? `https://explorer.solana.com/tx/${txSignature}?cluster=devnet`
+      : `https://explorer.solana.com/address/${payerKeypair.publicKey}?cluster=devnet`;
+
+    return {
+      success: !!txSignature,
+      txSignature,
+      explorerUrl,
+      latencyMs,
+      mandate,
+      receipt: capturedReceipt,
+      resourceData: responseBody,
+      payerPubkey: payerKeypair.publicKey,
+      merchantPubkey: merchantWallet,
+    };
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}

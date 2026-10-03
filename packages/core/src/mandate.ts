@@ -70,6 +70,17 @@ export function issueSignedMandate(
   return SignedMandateSchema.parse(signedMandate);
 }
 
+export const MANDATE_SIGN_PREFIX = 'CredaVer Mandate v1\n';
+
+/**
+ * Produces the human-readable signing bytes shown in Phantom and wallet popups:
+ * "CredaVer Mandate v1\n" + canonical RFC 8785 JSON representation of the MandateCore.
+ */
+export function getMandateSigningBytes(core: MandateCore): Uint8Array {
+  const json = canonicalizeJson(core);
+  return Buffer.from(`${MANDATE_SIGN_PREFIX}${json}`, 'utf8');
+}
+
 export interface MandateVerificationResult {
   isValid: boolean;
   error?: string;
@@ -80,7 +91,7 @@ export interface MandateVerificationResult {
  * Verifies cryptographic integrity of a Signed Mandate:
  * 1. Zod schema validation
  * 2. Hash canonical equivalence
- * 3. Operator Ed25519 signature
+ * 3. Operator Ed25519 signature (rebuilds readable prefix "CredaVer Mandate v1\n" + canonical JSON, with raw fallback)
  * 4. Agent counter-signature
  */
 export function verifySignedMandate(mandate: unknown): MandateVerificationResult {
@@ -116,10 +127,14 @@ export function verifySignedMandate(mandate: unknown): MandateVerificationResult
     };
   }
 
-  const canonicalBytes = Buffer.from(canonicalizeJson(coreOnly), 'utf8');
+  const prefixedBytes = getMandateSigningBytes(coreOnly);
+  const rawCanonicalBytes = Buffer.from(canonicalizeJson(coreOnly), 'utf8');
 
-  // Verify Operator signature
-  const isOperatorValid = verifyEd25519(canonicalBytes, m.operatorSignature, m.operatorPubkey);
+  // Verify Operator signature (checks readable prefixed bytes first, then raw canonical)
+  const isOperatorValid =
+    verifyEd25519(prefixedBytes, m.operatorSignature, m.operatorPubkey) ||
+    verifyEd25519(rawCanonicalBytes, m.operatorSignature, m.operatorPubkey);
+
   if (!isOperatorValid) {
     return {
       isValid: false,
@@ -129,7 +144,10 @@ export function verifySignedMandate(mandate: unknown): MandateVerificationResult
   }
 
   // Verify Agent counter-signature
-  const isAgentValid = verifyEd25519(canonicalBytes, m.agentCounterSignature, m.agentPubkey);
+  const isAgentValid =
+    verifyEd25519(prefixedBytes, m.agentCounterSignature, m.agentPubkey) ||
+    verifyEd25519(rawCanonicalBytes, m.agentCounterSignature, m.agentPubkey);
+
   if (!isAgentValid) {
     return {
       isValid: false,

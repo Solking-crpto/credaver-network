@@ -12,14 +12,14 @@ CredaVer uses **Vitest** for deterministic, sub-second test execution across all
 | `@credaver/core` | `packages/core/src/persistence.test.ts` | 4 | **PASS** | **Milestone 2 Dual Adapters & Lifecycle**: In-memory and Redis REST CRUD, mandate revocation immediate policy rejection (`REVOKED_MANDATE`), receipt filtering, audit log, and atomic `SET NX EX` concurrency race. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/guard.test.ts` | 5 | **PASS** | `createCredaverClientPolicy` filter for `x402Client.registerPolicy()`, enforcement of allowed assets/merchants/networks/caps, `CredaverAgentGuard` pre-authorization flow, and cumulative spend ledger tracking. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/constrained-signer.test.ts` | 5 | **PASS** | **Milestone 1 Constrained Signer Spike S5**: Agent zero-key custody proof, `@solana/kit` partial signing delegation, policy-gated signing, cap violation rejection, unlisted merchant rejection, review threshold gate, and cryptographic proof that agent cannot self-sign. |
-| `apps/web` | `apps/web/src/scenarios-api.test.ts` | 8 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), latency measurement, and operator review approval/rejection endpoints. |
-| `apps/web` | `apps/web/src/verify-api.test.ts` | 5 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, and 404/400 handling. |
-| `apps/web` | `apps/web/src/mandates-api.test.ts` | 4 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, and `GET /api/receipts/[id]`. |
-| `apps/web` | `apps/web/src/sign-api.test.ts` | 5 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, 202 REVIEW with pending audit receipt, **production fail-loud enforcement without Redis credentials**, and **sliding-window rate limiting with 429 response**. |
+| `apps/web` | `apps/web/src/scenarios-api.test.ts` | 9 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), live Devnet settlement scenario (`REAL_DEVNET`), latency measurement, and operator review approval/rejection endpoints. |
+| `apps/web` | `apps/web/src/verify-api.test.ts` | 7 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, authority verification, and 404/400 handling. |
+| `apps/web` | `apps/web/src/mandates-api.test.ts` | 7 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, `GET /api/receipts/[id]`, **Phantom readable message verification (`CredaVer Mandate v1\n`)**, **wrong signer rejection**, and **tampered fields rejection**. |
+| `apps/web` | `apps/web/src/sign-api.test.ts` | 7 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, 202 REVIEW with pending audit receipt, **production fail-loud enforcement without Redis credentials**, and **sliding-window rate limiting with 429 response**. |
 | `apps/web` | `apps/web/src/wallet.test.ts` | 4 | **PASS** | Phantom Connect / Wallet Standard challenge generation, Ed25519 challenge signing, server-side signature verification, imposter key rejection, and challenge tampering rejection. |
 | `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and **rejection of startup on facilitator sync failure**. |
 
-**Total Verified Tests**: **106 passing tests across 12 test suites (0 failures, 0 skips)**.
+**Total Verified Tests**: **116 passing tests across 12 test suites (0 failures, 0 skips)**.
 
 ---
 
@@ -80,9 +80,10 @@ pnpm exec tsx scripts/execute-s5-devnet-settlement.ts
 
 ### Verified Live On-Chain Devnet Settlement (Spike S5)
 * **Status**: **PASSED (100% Live Verified on Solana Devnet)**
-* **Transaction Signature**: `5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF`
-* **Solana Explorer (Devnet)**: [https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet](https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet)
-* **Agent Identity Pubkey**: `AYDjcF3smux6Y5yNo7CqjS3KPNiBhgE2cuVsGqNhMmmr` (holds **ONLY** identity Ed25519 key, **ZERO** access to funding wallet keys)
+* **Latest Transaction Signature**: `5NJXFePuPEvq8D3XeyCrJz2zoeqctMdaYGsS79zZDdndWq9r6iSgvxSxYux58mi2CJGNGZ4uMkGcutbryWqSDa4C`
+* **Solana Explorer (Devnet)**: [https://explorer.solana.com/tx/5NJXFePuPEvq8D3XeyCrJz2zoeqctMdaYGsS79zZDdndWq9r6iSgvxSxYux58mi2CJGNGZ4uMkGcutbryWqSDa4C?cluster=devnet](https://explorer.solana.com/tx/5NJXFePuPEvq8D3XeyCrJz2zoeqctMdaYGsS79zZDdndWq9r6iSgvxSxYux58mi2CJGNGZ4uMkGcutbryWqSDa4C?cluster=devnet)
+* **Previous Transaction Signature**: `5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF`
+* **Agent Identity Pubkey**: `C7QpyEnAWjG6LKwQcuhJ1vVdF9m35ZnDPw2ByVw1GBN8` (holds **ONLY** identity Ed25519 key, **ZERO** access to funding wallet keys)
 * **Funding Wallet (Server Custody)**: `HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS`
 * **Merchant Pubkey**: `D9KxfDqX46pHjs6HdCPrFGkrcEKjP9FAf41pHwkMGbBW`
 * **Settlement Amount**: 1.00 USDC (`1,000,000` base units)

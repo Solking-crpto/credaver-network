@@ -13,6 +13,12 @@ import {
   getServerReceiptAuthorityKeypair,
   getServerAnchorKeypair,
 } from '../../../lib/server-state';
+import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
+import {
+  checkDevnetPayerBalance,
+  checkFacilitatorHealth,
+  executeRealDevnetPayment,
+} from '../../../lib/real-devnet-payment';
 
 import { z } from 'zod';
 
@@ -22,10 +28,19 @@ export type ScenarioType =
   | 'REVOKED'
   | 'EXPIRED'
   | 'REPLAY'
-  | 'REVIEW';
+  | 'REVIEW'
+  | 'REAL_DEVNET';
 
 const ScenarioBodySchema = z.object({
-  scenario: z.enum(['ALLOW', 'OVER_CAP', 'REVOKED', 'EXPIRED', 'REPLAY', 'REVIEW']),
+  scenario: z.enum([
+    'ALLOW',
+    'OVER_CAP',
+    'REVOKED',
+    'EXPIRED',
+    'REPLAY',
+    'REVIEW',
+    'REAL_DEVNET',
+  ]),
 });
 
 export async function POST(req: NextRequest) {
@@ -422,6 +437,75 @@ export async function POST(req: NextRequest) {
         details: 'Amount exceeds review threshold. Held in pending reviews awaiting operator approval or rejection.',
         mandateId: mandate.mandateId,
         receipt: signResult.receipt,
+      });
+    }
+
+    // 7. SCENARIO: REAL_DEVNET (Live Devnet Settlement via Constrained Signer)
+    if (scenario === 'REAL_DEVNET') {
+      const clientIp = getClientIp(req);
+      const rl = checkRateLimit(`scenario_real:${clientIp}`, {
+        windowMs: 20000,
+        maxRequests: 2,
+      });
+
+      if (!rl.success) {
+        return NextResponse.json(
+          {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message:
+              'Real Devnet payments are rate limited to 2 requests per 20 seconds to protect testnet funds. Please wait before triggering another payment.',
+          },
+          { status: 429 }
+        );
+      }
+
+      // Check public facilitator health first
+      const facHealth = await checkFacilitatorHealth();
+      if (!facHealth.ok) {
+        return NextResponse.json(
+          {
+            error: 'FACILITATOR_UNAVAILABLE',
+            message:
+              facHealth.error ||
+              'The public x402 facilitator at https://x402.org/facilitator is unreachable or degraded.',
+          },
+          { status: 503 }
+        );
+      }
+
+      // Check devnet RPC connectivity and server payer balance
+      const balanceCheck = await checkDevnetPayerBalance();
+      if (!balanceCheck.ok) {
+        return NextResponse.json(
+          {
+            error: 'INSUFFICIENT_DEVNET_FUNDS',
+            message:
+              balanceCheck.error ||
+              'Server payer wallet has insufficient devnet funds. Please fund with devnet SOL and USDC.',
+            payerPubkey: balanceCheck.payerPubkey,
+            explorerUrl: balanceCheck.explorerUrl,
+          },
+          { status: 503 }
+        );
+      }
+
+      // Execute live settlement
+      const paymentResult = await executeRealDevnetPayment();
+
+      return NextResponse.json({
+        scenario: 'REAL_DEVNET',
+        statusCode: 200,
+        decision: 'ALLOW',
+        latencyMs: paymentResult.latencyMs,
+        details:
+          'Real x402 payment settled on Solana Devnet via CredaVer Constrained Signer and official public facilitator.',
+        txSignature: paymentResult.txSignature,
+        explorerUrl: paymentResult.explorerUrl,
+        mandateId: paymentResult.mandate.mandateId,
+        receipt: paymentResult.receipt,
+        payerPubkey: paymentResult.payerPubkey,
+        merchantPubkey: paymentResult.merchantPubkey,
+        resourceData: paymentResult.resourceData,
       });
     }
 

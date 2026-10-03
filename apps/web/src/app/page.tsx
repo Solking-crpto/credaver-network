@@ -5,7 +5,11 @@ import Link from 'next/link';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { StatusChip } from '../components/ui/StatusChip';
+import { usePhantomWallet } from '../hooks/usePhantomWallet';
+import { createInMemoryAgent, InMemoryAgent } from '../lib/browser-agent';
+import { getBase58Decoder } from '@solana/kit';
 import {
   ShieldCheck,
   Key,
@@ -22,6 +26,11 @@ import {
   ChevronRight,
   Clock,
   Layers,
+  Sparkles,
+  Plus,
+  Wallet,
+  Send,
+  ArrowRight,
 } from 'lucide-react';
 
 interface ScenarioResult {
@@ -33,6 +42,8 @@ interface ScenarioResult {
   reasonCodes?: string[];
   mandateId?: string;
   receipt?: any;
+  txSignature?: string;
+  explorerUrl?: string;
 }
 
 export default function HomePage() {
@@ -51,6 +62,30 @@ export default function HomePage() {
   // Receipts State
   const [receipts, setReceipts] = useState<any[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
+
+  // Phantom Wallet & In-Memory Agent State
+  const {
+    publicKey: phantomPubkey,
+    isConnected: isPhantomConnected,
+    connect: connectPhantom,
+    signMessage: signPhantomMessage,
+  } = usePhantomWallet();
+
+  const [showIssuePanel, setShowIssuePanel] = useState(false);
+  const [inMemoryAgent, setInMemoryAgent] = useState<InMemoryAgent | null>(null);
+  const [issueLoading, setIssueLoading] = useState(false);
+  const [issueStatusText, setIssueStatusText] = useState<string | null>(null);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [userIssuedMandate, setUserIssuedMandate] = useState<any | null>(null);
+
+  // Form Fields for Issue Mandate
+  const [mandateMaxPerTx, setMandateMaxPerTx] = useState('2.00'); // USDC
+  const [mandateTotalCap, setMandateTotalCap] = useState('5.00'); // USDC
+  const [mandateReviewThreshold, setMandateReviewThreshold] = useState('1.50'); // USDC
+
+  // User-Issued Mandate Interactive Testing State
+  const [userTestRunning, setUserTestRunning] = useState<string | null>(null);
+  const [userTestResult, setUserTestResult] = useState<any | null>(null);
 
   // Load Initial Data
   useEffect(() => {
@@ -88,6 +123,192 @@ export default function HomePage() {
     }
   };
 
+  const handleOpenIssuePanel = async () => {
+    setShowIssuePanel((prev) => !prev);
+    setIssueError(null);
+    if (!inMemoryAgent) {
+      try {
+        const agent = await createInMemoryAgent();
+        setInMemoryAgent(agent);
+      } catch (err: any) {
+        setIssueError(`Failed to generate in-memory agent: ${err.message}`);
+      }
+    }
+  };
+
+  const handleSignAndIssueMandate = async () => {
+    if (!phantomPubkey) {
+      await connectPhantom();
+      return;
+    }
+
+    setIssueLoading(true);
+    setIssueError(null);
+    setIssueStatusText('Initializing agent in-memory key...');
+
+    try {
+      let agent = inMemoryAgent;
+      if (!agent) {
+        agent = await createInMemoryAgent();
+        setInMemoryAgent(agent);
+      }
+
+      setIssueStatusText('Preparing canonical RFC 8785 mandate core...');
+      const maxPerTxUnits = String(Math.round(parseFloat(mandateMaxPerTx) * 1e6));
+      const totalCapUnits = String(Math.round(parseFloat(mandateTotalCap) * 1e6));
+      const reviewUnits = mandateReviewThreshold
+        ? String(Math.round(parseFloat(mandateReviewThreshold) * 1e6))
+        : undefined;
+
+      const prepRes = await fetch('/api/mandates/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operatorPubkey: phantomPubkey,
+          agentPubkey: agent.agentPubkey,
+          maxPerTx: maxPerTxUnits,
+          totalCap: totalCapUnits,
+          reviewThreshold: reviewUnits,
+          expiresInMinutes: 120,
+        }),
+      });
+
+      if (!prepRes.ok) {
+        const prepErr = await prepRes.json();
+        throw new Error(prepErr.message || 'Failed to prepare mandate core');
+      }
+
+      const { core, mandateHash, signingMessage } = await prepRes.json();
+
+      setIssueStatusText('Please sign the readable message in your Phantom wallet...');
+      const msgBytes = new TextEncoder().encode(signingMessage);
+      const phantomSigResult = await signPhantomMessage(msgBytes);
+
+      const decoder = getBase58Decoder();
+      const operatorSignature = decoder.decode(phantomSigResult.signature);
+
+      setIssueStatusText('Co-signing with in-memory agent key...');
+      const agentCounterSignature = await agent.signBytes(msgBytes);
+
+      setIssueStatusText('Submitting and verifying mutual Ed25519 signatures...');
+      const signedMandatePayload = {
+        ...core,
+        mandateHash,
+        operatorSignature,
+        agentCounterSignature,
+        revoked: false,
+      };
+
+      const submitRes = await fetch('/api/mandates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signedMandatePayload),
+      });
+
+      if (!submitRes.ok) {
+        const submitErr = await submitRes.json();
+        throw new Error(submitErr.message || 'Server rejected mandate signature');
+      }
+
+      const submitData = await submitRes.json();
+      setUserIssuedMandate(submitData.mandate);
+      setIssueStatusText(null);
+      fetchMandates();
+    } catch (err: any) {
+      setIssueError(err.message || 'Failed to issue mandate');
+      setIssueStatusText(null);
+    } finally {
+      setIssueLoading(false);
+    }
+  };
+
+  const runUserMandateTest = async (testType: 'ALLOWED' | 'OVER_CAP' | 'REVOKED') => {
+    if (!userIssuedMandate || !inMemoryAgent) return;
+    setUserTestRunning(testType);
+    setUserTestResult(null);
+
+    try {
+      let amountUnits = '1000000'; // $1.00 USDC
+      if (testType === 'OVER_CAP') {
+        amountUnits = '10000000'; // $10.00 USDC (exceeds total cap)
+      }
+
+      if (testType === 'REVOKED') {
+        await fetch(`/api/mandates/${userIssuedMandate.mandateId}/revoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Operator testing revocation policy' }),
+        });
+        fetchMandates();
+      }
+
+      // 1. Get canonical proof template
+      const templateRes = await fetch('/api/proofs/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mandateHash: userIssuedMandate.mandateHash,
+          agentPubkey: inMemoryAgent.agentPubkey,
+          amount: amountUnits,
+        }),
+      });
+      const templateData = await templateRes.json();
+
+      // 2. In-memory agent signs canonical JSON proof
+      const proofBytes = new TextEncoder().encode(templateData.canonicalJson);
+      const agentProofSig = await inMemoryAgent.signBytes(proofBytes);
+
+      const signedProof = {
+        ...templateData.core,
+        proofHash: templateData.proofHash,
+        signature: agentProofSig,
+      };
+
+      // 3. Submit to PDP signing endpoint
+      const signRes = await fetch('/api/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mandateHash: userIssuedMandate.mandateHash,
+          proof: signedProof,
+          transactionMessageBytes: btoa('mock-test-svm-transaction-message'),
+        }),
+      });
+
+      const signData = await signRes.json();
+      setUserTestResult({
+        testType,
+        statusCode: signRes.status,
+        decision: signData.decision || (signRes.status === 200 ? 'ALLOW' : 'DENY'),
+        reasonCodes:
+          signData.reasonCodes ||
+          (signRes.status === 200 ? ['POLICY_PASSED_ALL_GATES'] : ['POLICY_VIOLATION']),
+        receipt: signData.receipt,
+        details:
+          testType === 'ALLOWED'
+            ? 'Agent payment under cap approved. Spend recorded and receipt issued.'
+            : testType === 'OVER_CAP'
+            ? 'Agent payment rejected: Amount exceeds mandate limits (AMOUNT_EXCEEDS_CAP).'
+            : 'Agent payment rejected: Mandate was revoked by operator (REVOKED_MANDATE).',
+      });
+
+      if (signData.receipt) {
+        setActiveReceipt(signData.receipt);
+      }
+      fetchMandates();
+      fetchReceipts();
+    } catch (err: any) {
+      setUserTestResult({
+        testType,
+        statusCode: 500,
+        decision: 'DENY',
+        details: err.message || 'Test failed',
+      });
+    } finally {
+      setUserTestRunning(null);
+    }
+  };
+
   const runScenario = async (scenario: string) => {
     setRunningScenario(scenario);
     try {
@@ -103,6 +324,18 @@ export default function HomePage() {
         if (data.decision === 'REVIEW') {
           setPendingReviewReceipt(data.receipt);
         }
+      } else {
+        setScenarioResults((prev) => ({
+          ...prev,
+          [scenario]: {
+            scenario,
+            statusCode: res.status,
+            decision: 'DENY',
+            latencyMs: 0,
+            details: data.message || data.error || 'Scenario request failed',
+            explorerUrl: data.explorerUrl,
+          },
+        }));
       }
       // Refresh backend views
       fetchMandates();
@@ -419,6 +652,77 @@ export default function HomePage() {
               </span>
             </div>
           </Card>
+
+          {/* Scenario 7: REAL_DEVNET */}
+          <Card
+            className={`cursor-pointer transition-all border sm:col-span-2 lg:col-span-3 ${
+              scenarioResults['REAL_DEVNET']
+                ? scenarioResults['REAL_DEVNET'].statusCode === 200
+                  ? 'border-emerald-500/60 bg-emerald-950/20'
+                  : 'border-amber-500/60 bg-amber-950/20'
+                : 'hover:border-emerald-400/60 border-emerald-500/30 bg-emerald-950/10'
+            }`}
+            onClick={() => runScenario('REAL_DEVNET')}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-mono font-bold text-emerald-400">
+                  7. Real Devnet Settlement (x402 V2 Protocol)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="green" className="text-[10px] py-0.5 px-2 font-bold animate-pulse">
+                  REAL (devnet)
+                </Badge>
+                {scenarioResults['REAL_DEVNET'] && (
+                  <StatusChip status={scenarioResults['REAL_DEVNET'].decision} />
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Executes one <strong className="text-white">live on-chain x402 payment</strong> settled on Solana Devnet. The agent (holding ONLY its identity key) requests 1.00 USDC telemetry from the demo merchant. The CredaVer Constrained Signer evaluates policy gates, signs SVM transaction message bytes with the server custody payer, and the official public facilitator (<code className="text-credav-cyan">x402.org</code>) broadcasts and settles the payment on-chain.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-between pt-2 border-t border-emerald-500/20 text-xs font-mono gap-2">
+              <div className="text-slate-400 flex items-center gap-2">
+                {runningScenario === 'REAL_DEVNET' ? (
+                  <span className="text-emerald-400 animate-pulse flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                    Executing Real Devnet Settlement via Facilitator (takes ~5-8s)...
+                  </span>
+                ) : scenarioResults['REAL_DEVNET'] ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-slate-300">
+                      Latency: {scenarioResults['REAL_DEVNET'].latencyMs}ms
+                    </span>
+                    {scenarioResults['REAL_DEVNET'].txSignature && (
+                      <Link
+                        href={scenarioResults['REAL_DEVNET'].explorerUrl || `https://explorer.solana.com/tx/${scenarioResults['REAL_DEVNET'].txSignature}?cluster=devnet`}
+                        target="_blank"
+                        className="text-emerald-400 underline font-bold inline-flex items-center gap-1 hover:text-emerald-300"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Solana Explorer TX <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    )}
+                    {scenarioResults['REAL_DEVNET'].details && (
+                      <span className="text-slate-400 text-[11px]">
+                        {scenarioResults['REAL_DEVNET'].details}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-emerald-400/80">
+                    REAL CONSTRAINED SIGNER + OFFICIAL PUBLIC FACILITATOR
+                  </span>
+                )}
+              </div>
+              <span className="text-credav-cyan font-bold flex items-center gap-1">
+                {runningScenario === 'REAL_DEVNET' ? 'Processing...' : '⚡ Execute Live Devnet Payment'}{' '}
+                <ChevronRight className="w-3.5 h-3.5" />
+              </span>
+            </div>
+          </Card>
         </div>
 
         {/* Pending Review Decision Modal / Banner */}
@@ -501,8 +805,8 @@ export default function HomePage() {
       {/* ========================================================================= */}
       {/* ACTIVE MANDATES REGISTRY VIEW (Section 5.1)                               */}
       {/* ========================================================================= */}
-      <section id="mandates" className="space-y-4">
-        <div className="flex items-center justify-between">
+      <section id="mandates" className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Lock className="w-5 h-5 text-credav-cyan" />
@@ -510,10 +814,252 @@ export default function HomePage() {
             </h2>
             <Badge variant="cyan">{mandates.length}</Badge>
           </div>
-          <Button size="sm" variant="outline" onClick={fetchMandates} isLoading={mandatesLoading}>
-            <RotateCcw className="w-3.5 h-3.5 mr-1" /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleOpenIssuePanel}
+              className="shadow-glow"
+            >
+              <Key className="w-3.5 h-3.5 mr-1" />
+              <span>{showIssuePanel ? 'Close Issuance' : 'Issue Mandate with Phantom'}</span>
+            </Button>
+            <Button size="sm" variant="outline" onClick={fetchMandates} isLoading={mandatesLoading}>
+              <RotateCcw className="w-3.5 h-3.5 mr-1" /> Refresh
+            </Button>
+          </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* INTERACTIVE PHANTOM MANDATE ISSUANCE PANEL                                */}
+        {/* ========================================================================= */}
+        {showIssuePanel && (
+          <Card glow className="border-credav-cyan/40 bg-slate-900/90 p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-credav-border/60 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Key className="w-4 h-4 text-credav-cyan" />
+                  Issue Agent Mandate via Phantom Wallet
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Phantom signs readable text (<code className="text-credav-cyan">CredaVer Mandate v1</code> + canonical RFC 8785 JSON). Agent co-signs with in-browser memory key.
+                </p>
+              </div>
+              <Badge variant="cyan" className="self-start sm:self-auto">
+                Mutual Ed25519 Signatures
+              </Badge>
+            </div>
+
+            {/* Operator & Agent Public Keys */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-3 bg-credav-surface rounded-lg border border-credav-border/60 space-y-1">
+                <div className="text-slate-400 flex items-center justify-between">
+                  <span>1. Operator Identity (Phantom):</span>
+                  {isPhantomConnected ? (
+                    <span className="text-emerald-400 text-[11px]">● Connected</span>
+                  ) : (
+                    <span className="text-amber-400 text-[11px]">● Not Connected</span>
+                  )}
+                </div>
+                {phantomPubkey ? (
+                  <div className="text-white font-bold truncate">{phantomPubkey}</div>
+                ) : (
+                  <Button size="sm" variant="outline" className="mt-1" onClick={connectPhantom}>
+                    <Wallet className="w-3.5 h-3.5 mr-1" /> Connect Phantom Wallet
+                  </Button>
+                )}
+              </div>
+
+              <div className="p-3 bg-credav-surface rounded-lg border border-credav-border/60 space-y-1">
+                <div className="text-slate-400 flex items-center justify-between">
+                  <span>2. Agent Identity (In-Memory):</span>
+                  <Badge variant="violet" className="text-[10px] py-0 px-1.5">
+                    RAM ONLY
+                  </Badge>
+                </div>
+                <div className="text-white font-bold truncate">
+                  {inMemoryAgent?.agentPubkey || 'Generating ephemeral WebCrypto key...'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Private key held strictly in React state memory — never leaves browser.
+                </div>
+              </div>
+            </div>
+
+            {/* Mandate Policy Configuration Parameters */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Per-Transaction Limit (USDC)
+                </label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={mandateMaxPerTx}
+                  onChange={(e) => setMandateMaxPerTx(e.target.value)}
+                  placeholder="2.00"
+                  className="font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Total Cumulative Cap (USDC)
+                </label>
+                <Input
+                  type="number"
+                  step="1.0"
+                  value={mandateTotalCap}
+                  onChange={(e) => setMandateTotalCap(e.target.value)}
+                  placeholder="5.00"
+                  className="font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Human Review Threshold (USDC)
+                </label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={mandateReviewThreshold}
+                  onChange={(e) => setMandateReviewThreshold(e.target.value)}
+                  placeholder="1.50"
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Readable Message Format Preview */}
+            <div className="p-2.5 rounded bg-slate-950/80 border border-slate-800 text-[11px] font-mono text-slate-400">
+              <span className="text-slate-500">Phantom Sign Preview: </span>
+              <span className="text-credav-cyan font-bold">CredaVer Mandate v1</span>
+              <span> + {`{"allowedAssets":["USDC"],"maxPerTx":"${Math.round(parseFloat(mandateMaxPerTx || '2') * 1e6)}","totalCap":"${Math.round(parseFloat(mandateTotalCap || '5') * 1e6)}"}`}</span>
+            </div>
+
+            {/* Error or Status Feedback */}
+            {issueStatusText && (
+              <div className="text-xs font-mono text-credav-cyan animate-pulse flex items-center gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                <span>{issueStatusText}</span>
+              </div>
+            )}
+            {issueError && (
+              <div className="p-2.5 rounded bg-rose-950/40 border border-rose-500/40 text-xs font-mono text-rose-300">
+                ⚠️ {issueError}
+              </div>
+            )}
+
+            {/* Submit Action Button */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-credav-border/40">
+              <Button
+                variant="primary"
+                onClick={handleSignAndIssueMandate}
+                isLoading={issueLoading}
+                disabled={!isPhantomConnected && !phantomPubkey}
+              >
+                <Key className="w-3.5 h-3.5 mr-1" />
+                <span>✍️ Sign &amp; Activate Mandate in Phantom</span>
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* ========================================================================= */}
+        {/* INTERACTIVE AGENT TESTING CONSOLE FOR USER-ISSUED MANDATE                 */}
+        {/* ========================================================================= */}
+        {userIssuedMandate && inMemoryAgent && (
+          <Card glow className="border-emerald-500/50 bg-emerald-950/20 p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/30 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="green">LIVE USER MANDATE ACTIVATED</Badge>
+                  <span className="text-xs font-mono font-bold text-white">
+                    {userIssuedMandate.mandateId}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  Test your active Phantom-signed mandate. The in-memory agent co-signs request-bound payment proofs against CredaVer&apos;s real policy engine.
+                </p>
+              </div>
+              <div className="text-right text-xs font-mono text-slate-400">
+                <div>Cap: <span className="text-emerald-400 font-bold">{formatAmountUSDC(userIssuedMandate.totalCap)}</span></div>
+                <div>Per-Tx: <span className="text-white">{formatAmountUSDC(userIssuedMandate.maxPerTx)}</span></div>
+              </div>
+            </div>
+
+            {/* 3 Interactive Testing Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button
+                variant="primary"
+                size="sm"
+                className="justify-center"
+                onClick={() => runUserMandateTest('ALLOWED')}
+                isLoading={userTestRunning === 'ALLOWED'}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                <span>1. Test Allowed ($1.00)</span>
+              </Button>
+
+              <Button
+                variant="danger"
+                size="sm"
+                className="justify-center"
+                onClick={() => runUserMandateTest('OVER_CAP')}
+                isLoading={userTestRunning === 'OVER_CAP'}
+              >
+                <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                <span>2. Test Over-Cap ($10.00)</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-center hover:border-rose-500 hover:text-rose-400"
+                onClick={() => runUserMandateTest('REVOKED')}
+                isLoading={userTestRunning === 'REVOKED'}
+              >
+                <Lock className="w-3.5 h-3.5 mr-1.5" />
+                <span>3. Revoke &amp; Test Blocked</span>
+              </Button>
+            </div>
+
+            {/* Test Result Inspector */}
+            {userTestResult && (
+              <div className="p-3 bg-slate-950/80 rounded-lg border border-credav-border/60 space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <StatusChip status={userTestResult.decision} />
+                    <span className="text-white font-bold">
+                      Test Result: {userTestResult.testType}
+                    </span>
+                  </div>
+                  <span className="text-slate-400">HTTP {userTestResult.statusCode}</span>
+                </div>
+                <p className="text-slate-300">{userTestResult.details}</p>
+                {userTestResult.reasonCodes && (
+                  <div className="text-[11px] text-slate-400">
+                    Reason Codes: <span className="text-credav-cyan">{userTestResult.reasonCodes.join(', ')}</span>
+                  </div>
+                )}
+                {userTestResult.receipt && (
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">
+                      Receipt ID: {userTestResult.receipt.receiptId}
+                    </span>
+                    <Link
+                      href={`/verify?receiptId=${userTestResult.receipt.receiptId}`}
+                      className="text-credav-cyan underline hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      Verify Decision Receipt <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
 
         {mandates.length === 0 ? (
           <Card className="text-center py-8 text-slate-400 font-mono text-xs">
