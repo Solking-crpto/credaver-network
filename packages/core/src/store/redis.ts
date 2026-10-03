@@ -1,4 +1,4 @@
-import { ICredaverStore } from './index.js';
+import { ICredaverStore, MandateFilter, ReceiptFilter, AuditEvent } from './index.js';
 import { SignedMandate } from '../mandate.js';
 import { SignedReceipt } from '../receipt.js';
 
@@ -134,6 +134,7 @@ export class RedisStore implements ICredaverStore {
 
   async saveMandate(mandate: SignedMandate): Promise<void> {
     await redisSet(`credav:mandate:${mandate.mandateId}`, mandate, 365 * 86400, this.config);
+    await redisCommand(['SADD', 'credav:mandates:all', mandate.mandateId], this.config);
   }
 
   async revokeMandate(mandateId: string, reason?: string): Promise<void> {
@@ -146,12 +147,72 @@ export class RedisStore implements ICredaverStore {
     }
   }
 
+  async listMandates(filter?: MandateFilter): Promise<SignedMandate[]> {
+    const ids = (await redisCommand<string[]>(['SMEMBERS', 'credav:mandates:all'], this.config)) || [];
+    const list: SignedMandate[] = [];
+    for (const id of ids) {
+      const m = await this.getMandate(id);
+      if (m) list.push(m);
+    }
+    let filtered = list;
+    if (filter?.operatorPubkey) {
+      filtered = filtered.filter((m) => m.operatorPubkey === filter.operatorPubkey);
+    }
+    if (filter?.agentPubkey) {
+      filtered = filtered.filter((m) => m.agentPubkey === filter.agentPubkey);
+    }
+    if (filter?.revoked !== undefined) {
+      filtered = filtered.filter((m) => Boolean(m.revoked) === filter.revoked);
+    }
+    return filtered.sort((a, b) => b.validFrom - a.validFrom);
+  }
+
   async saveReceipt(receipt: SignedReceipt): Promise<void> {
     await redisSet(`credav:receipt:${receipt.receiptId}`, receipt, 365 * 86400, this.config);
+    await redisCommand(['SADD', 'credav:receipts:all', receipt.receiptId], this.config);
   }
 
   async getReceipt(receiptId: string): Promise<SignedReceipt | null> {
     return redisGet<SignedReceipt>(`credav:receipt:${receiptId}`, this.config);
+  }
+
+  async listReceipts(filter?: ReceiptFilter): Promise<SignedReceipt[]> {
+    const ids = (await redisCommand<string[]>(['SMEMBERS', 'credav:receipts:all'], this.config)) || [];
+    const list: SignedReceipt[] = [];
+    for (const id of ids) {
+      const r = await this.getReceipt(id);
+      if (r) list.push(r);
+    }
+    let filtered = list;
+    if (filter?.agentPubkey) {
+      filtered = filtered.filter((r) => r.agentPubkey === filter.agentPubkey);
+    }
+    if (filter?.merchantPubkey) {
+      filtered = filtered.filter((r) => r.merchantPubkey === filter.merchantPubkey);
+    }
+    if (filter?.decision) {
+      filtered = filtered.filter((r) => r.decision === filter.decision);
+    }
+    return filtered.sort((a, b) => b.issuedAt - a.issuedAt);
+  }
+
+  async saveAuditEvent(event: AuditEvent): Promise<void> {
+    await redisSet(`credav:audit:${event.eventId}`, event, 365 * 86400, this.config);
+    await redisCommand(['RPUSH', 'credav:audit:all', event.eventId], this.config);
+  }
+
+  async listAuditEvents(filter?: { entityId?: string }): Promise<AuditEvent[]> {
+    const ids = (await redisCommand<string[]>(['LRANGE', 'credav:audit:all', 0, -1], this.config)) || [];
+    const list: AuditEvent[] = [];
+    for (const id of ids) {
+      const e = await redisGet<AuditEvent>(`credav:audit:${id}`, this.config);
+      if (e) list.push(e);
+    }
+    let filtered = list;
+    if (filter?.entityId) {
+      filtered = filtered.filter((e) => e.entityId === filter.entityId);
+    }
+    return filtered.sort((a, b) => b.timestamp - a.timestamp);
   }
 }
 

@@ -81,7 +81,33 @@ flowchart TD
 
 ### D. `apps/web` (Operator Dashboard & Verification Portal)
 * Next.js 15, React 19, Tailwind CSS.
-* **CredaVer Cybernetic Theme**: Deep navy/black (`#050711`), blue-cyan (`#00f2fe`), violet accents (`#7f00ff`), restrained magenta (`#f857a6`), and subtle glow.
-* Native **Phantom Connect & Wallet Standard** (no legacy `@solana/web3.js` bloat).
-* Header designed with dedicated drop-in slot for founder brand logo (`apps/web/public/brand/logo.png`).
+* **CredaVer Brand Palette**: Deep space background (`#03050d`), surface panels (`#0a0f22`), electric cyan (`#00d8ff`), cobalt blue (`#0a64ff`), deep violet (`#8a3dff`), and magenta accents (`#c04bff`).
+* Native **Phantom Connect & Wallet Standard** (challenge-response Ed25519 authentication).
 * Visual inspector for Mandates, Policy evaluations, and independently verified Receipts.
+
+---
+
+## 2. Storage Schema & Key Space Specification
+
+CredaVer uses a dual storage adapter model:
+1. **`MemoryStore`**: Zero-dependency in-process Map-backed store for unit tests, local development, and embedded client guards.
+2. **`RedisStore`**: Upstash Redis REST store for production with atomic single-operation primitives.
+
+### Redis Key Space & Data Models
+
+| Entity | Key Pattern | Type | Value / Schema | Purpose |
+|---|---|---|---|---|
+| **Replay Nonce** | `credav:nonce:<nonce>` | String | `"consumed"` (TTL: 300s) | Atomic `SET NX EX` prevents replay attacks concurrently. |
+| **Mandate** | `credav:mandate:<mandateId>` | String (JSON) | `SignedMandate` | Serialized mutual operator/agent signed mandate with revocation flags. |
+| **Mandate Index** | `credav:mandates:all` | Set / List | Array of `mandateId` | Secondary index for pagination and listing. |
+| **Mandate Spend** | `credav:spend:<mandateId>` | String (BigInt) | Cumulative base units (e.g. `"1000000"`) | Spend ledger against `totalCap`. |
+| **Receipt** | `credav:receipt:<receiptId>` | String (JSON) | `SignedReceipt` | Cryptographically signed decision receipt (ALLOW/DENY/REVIEW). |
+| **Receipt Index** | `credav:receipts:all` | Set / List | Array of `receiptId` | Secondary index for dashboard receipt stream. |
+| **Agent Profile** | `credav:agent:<pubkey>` | String (JSON) | `{ agentPubkey, name, role, createdAt }` | Registry of authorized autonomous agents. |
+| **Audit Event** | `credav:audit:<eventId>` | String (JSON) | `AuditEvent` | Append-only security audit log of lifecycle mutations. |
+| **Audit Index** | `credav:audit:all` | List | Array of `eventId` | Time-ordered log of operator revocations, cap edits, and policy violations. |
+
+### Atomic Check-And-Set Invariant
+All nonce consumption uses atomic Redis `SET key value NX EX ttlSeconds`. If two concurrent requests arrive simultaneously with the same nonce:
+- Exactly **one** command receives `OK` and proceeds to policy evaluation.
+- The competing command receives `null` and is immediately rejected with reason code `NONCE_REPLAYED` without reading or writing intermediate state.

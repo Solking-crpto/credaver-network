@@ -1,6 +1,31 @@
 import { SignedMandate } from '../mandate.js';
 import { SignedReceipt } from '../receipt.js';
 
+export interface MandateFilter {
+  operatorPubkey?: string;
+  agentPubkey?: string;
+  revoked?: boolean;
+}
+
+export interface ReceiptFilter {
+  agentPubkey?: string;
+  merchantPubkey?: string;
+  decision?: 'ALLOW' | 'DENY' | 'REVIEW';
+}
+
+export interface AuditEvent {
+  eventId: string;
+  type:
+    | 'MANDATE_CREATED'
+    | 'MANDATE_REVOKED'
+    | 'PAYMENT_PROCESSED'
+    | 'POLICY_DENIED'
+    | 'REVIEW_REQUESTED';
+  entityId: string;
+  timestamp: number;
+  data: Record<string, any>;
+}
+
 export interface ICredaverStore {
   /**
    * Atomically consumes a nonce with a TTL.
@@ -15,9 +40,14 @@ export interface ICredaverStore {
   getMandate(mandateId: string): Promise<SignedMandate | null>;
   saveMandate(mandate: SignedMandate): Promise<void>;
   revokeMandate(mandateId: string, reason?: string): Promise<void>;
+  listMandates(filter?: MandateFilter): Promise<SignedMandate[]>;
 
   saveReceipt(receipt: SignedReceipt): Promise<void>;
   getReceipt(receiptId: string): Promise<SignedReceipt | null>;
+  listReceipts(filter?: ReceiptFilter): Promise<SignedReceipt[]>;
+
+  saveAuditEvent(event: AuditEvent): Promise<void>;
+  listAuditEvents(filter?: { entityId?: string }): Promise<AuditEvent[]>;
 }
 
 /**
@@ -29,6 +59,7 @@ export class MemoryStore implements ICredaverStore {
   private spends = new Map<string, bigint>();
   private mandates = new Map<string, SignedMandate>();
   private receipts = new Map<string, SignedReceipt>();
+  private auditEvents: AuditEvent[] = [];
 
   async consumeNonce(nonce: string, ttlSeconds: number): Promise<boolean> {
     const now = Date.now();
@@ -71,6 +102,20 @@ export class MemoryStore implements ICredaverStore {
     }
   }
 
+  async listMandates(filter?: MandateFilter): Promise<SignedMandate[]> {
+    let list = Array.from(this.mandates.values());
+    if (filter?.operatorPubkey) {
+      list = list.filter((m) => m.operatorPubkey === filter.operatorPubkey);
+    }
+    if (filter?.agentPubkey) {
+      list = list.filter((m) => m.agentPubkey === filter.agentPubkey);
+    }
+    if (filter?.revoked !== undefined) {
+      list = list.filter((m) => Boolean(m.revoked) === filter.revoked);
+    }
+    return list.sort((a, b) => b.validFrom - a.validFrom);
+  }
+
   async saveReceipt(receipt: SignedReceipt): Promise<void> {
     this.receipts.set(receipt.receiptId, receipt);
   }
@@ -79,10 +124,37 @@ export class MemoryStore implements ICredaverStore {
     return this.receipts.get(receiptId) ?? null;
   }
 
+  async listReceipts(filter?: ReceiptFilter): Promise<SignedReceipt[]> {
+    let list = Array.from(this.receipts.values());
+    if (filter?.agentPubkey) {
+      list = list.filter((r) => r.agentPubkey === filter.agentPubkey);
+    }
+    if (filter?.merchantPubkey) {
+      list = list.filter((r) => r.merchantPubkey === filter.merchantPubkey);
+    }
+    if (filter?.decision) {
+      list = list.filter((r) => r.decision === filter.decision);
+    }
+    return list.sort((a, b) => b.issuedAt - a.issuedAt);
+  }
+
+  async saveAuditEvent(event: AuditEvent): Promise<void> {
+    this.auditEvents.push(event);
+  }
+
+  async listAuditEvents(filter?: { entityId?: string }): Promise<AuditEvent[]> {
+    let list = [...this.auditEvents];
+    if (filter?.entityId) {
+      list = list.filter((e) => e.entityId === filter.entityId);
+    }
+    return list.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
   clear(): void {
     this.nonces.clear();
     this.spends.clear();
     this.mandates.clear();
     this.receipts.clear();
+    this.auditEvents = [];
   }
 }
