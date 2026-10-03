@@ -7,3 +7,4 @@ export * from './receipt.js';
 export * from './store/index.js';
 export * from './store/redis.js';
 export * from './signer-service.js';
+export * from './state-machine.js';

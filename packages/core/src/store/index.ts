@@ -18,9 +18,16 @@ export interface AuditEvent {
   type:
     | 'MANDATE_CREATED'
     | 'MANDATE_REVOKED'
+    | 'MANDATE_STATE_CHANGED'
+    | 'REQUEST_TRANSITION'
+    | 'POLICY_EVALUATED'
     | 'PAYMENT_PROCESSED'
     | 'POLICY_DENIED'
-    | 'REVIEW_REQUESTED';
+    | 'REVIEW_REQUESTED'
+    | 'REVIEW_APPROVED'
+    | 'REVIEW_REJECTED'
+    | 'PAYMENT_SETTLED'
+    | 'PAYMENT_FAILED';
   entityId: string;
   timestamp: number;
   data: Record<string, any>;
@@ -147,7 +154,7 @@ export class MemoryStore implements ICredaverStore {
     if (filter?.entityId) {
       list = list.filter((e) => e.entityId === filter.entityId);
     }
-    return list.sort((a, b) => b.timestamp - a.timestamp);
+    return list.reverse().sort((a, b) => b.timestamp - a.timestamp);
   }
 
   clear(): void {

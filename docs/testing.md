@@ -76,3 +76,43 @@ This runnable script proves:
 4. **DENY on Rogue Merchant**: Agent attempts payment to an unlisted merchant; CredaVer rejects with 403 `MERCHANT_NOT_ALLOWED`.
 5. **REVIEW Gate**: Payment exceeding `reviewThreshold` returns 202 `HIGH_VALUE_TRANSACTION_REQUIRES_REVIEW` and is held pending operator review.
 6. **Bypass Resistance**: If the agent attempts to self-sign the transaction message using its identity key, the signature fails Solana verification against the funding wallet address.
+
+---
+
+## Milestone 2: Upstash Redis & REST API Persistence
+
+Run the test suites:
+```bash
+pnpm test packages/core/src/persistence.test.ts apps/web/src/mandates-api.test.ts
+```
+Covers:
+1. **ICredaverStore & Upstash Redis Implementation**: Storage abstractions for Mandates, Receipts, Nonces, and Audit Events.
+2. **Atomic Nonce Consumption**: Concurrency tested with atomic `SET NX EX` race prevention where exactly 1 of 5 concurrent requests succeeds and 4 fail.
+3. **Mandates REST API**: Endpoints `GET /api/mandates`, `POST /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`.
+4. **Receipts REST API**: Endpoints `GET /api/receipts`, `GET /api/receipts/[id]`.
+
+---
+
+## Milestone 3: Explicit State Machines and Audit Trail
+
+Run the test suite:
+```bash
+pnpm test packages/core/src/state-machine.test.ts
+```
+Covers:
+1. **Mandate State Machine (`MandateLifecycle`)**:
+   - Explicit lifecycle states: `DRAFT` -> `ACTIVE` -> `REVOKED` | `EXPIRED` | `DEPLETED`.
+   - Disallowed transitions (e.g., `REVOKED` -> `ACTIVE`) strictly throw `InvalidStateTransitionError`.
+   - `computeMandateState` dynamically calculates active, expired, or depleted states from spend and expiration timestamps.
+2. **Request State Machine (`RequestLifecycle`)**:
+   - Explicit states: `RECEIVED` -> `EVALUATING` -> `ALLOWED` | `DENIED` | `PENDING_REVIEW`.
+   - Review states: `PENDING_REVIEW` -> `APPROVED` | `REJECTED` -> `ALLOWED` | `DENIED`.
+   - Terminal settlement states: `ALLOWED` -> `SETTLED` | `FAILED`.
+   - All terminal transitions emit audit events.
+3. **Standardized Reason Codes**:
+   - 14 standardized codes: `EXPIRED_MANDATE`, `REVOKED_MANDATE`, `DEPLETED_MANDATE`, `NOT_YET_VALID`, `MERCHANT_NOT_ALLOWED`, `ASSET_NOT_ALLOWED`, `NETWORK_MISMATCH`, `AMOUNT_EXCEEDS_CAP`, `AMOUNT_EXCEEDS_PER_TX`, `AMOUNT_EXCEEDS_REVIEW_THRESHOLD`, `REPLAY_DETECTED`, `INVALID_SIGNATURE`, `INVALID_PROOF`, `OPERATOR_REJECTED`.
+   - Backwards-compatible aliases retained for legacy tests and API consumers.
+4. **Inspectable Chronological Audit Trail**:
+   - Audit events appended on every transition and mutation.
+   - Inspectable chronological queries via `ICredaverStore.listAuditEvents`.
+

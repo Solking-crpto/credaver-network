@@ -212,7 +212,7 @@ export class RedisStore implements ICredaverStore {
     if (filter?.entityId) {
       filtered = filtered.filter((e) => e.entityId === filter.entityId);
     }
-    return filtered.sort((a, b) => b.timestamp - a.timestamp);
+    return filtered.reverse().sort((a, b) => b.timestamp - a.timestamp);
   }
 }
 
