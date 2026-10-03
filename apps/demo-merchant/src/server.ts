@@ -20,7 +20,7 @@ export interface DemoMerchantOptions {
 /**
  * Creates the demo merchant Express app with official @x402/express + @x402/svm resource server.
  */
-export function createDemoMerchantApp(options: DemoMerchantOptions = {}): Express {
+export async function createDemoMerchantApp(options: DemoMerchantOptions = {}): Promise<Express> {
   const app: Express = express();
   app.use(express.json());
 
@@ -51,13 +51,40 @@ export function createDemoMerchantApp(options: DemoMerchantOptions = {}): Expres
 
   // Check if official @x402 resource server middleware is enabled
   if (options.useOfficialResourceServer) {
+    const facilitatorUrl = options.facilitatorUrl || OFFICIAL_FACILITATOR_URL;
+
+    // Character-for-character network confirmation debug log
+    console.log(`[CredaVer Debug] Configured network: "${SOLANA_DEVNET_GENESIS}"`);
+    console.log(`[CredaVer Debug] Expected network:   "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"`);
+    console.log(`[CredaVer Debug] Exact match: ${SOLANA_DEVNET_GENESIS === 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'}`);
+    console.log(`[CredaVer] Initializing resource server with facilitator: ${facilitatorUrl}...`);
+
     const facilitator = new HTTPFacilitatorClient({
-      url: options.facilitatorUrl || OFFICIAL_FACILITATOR_URL,
+      url: facilitatorUrl,
     });
     const resourceServer = new x402ResourceServer([facilitator]).register(
       SOLANA_DEVNET_GENESIS,
       new ExactSvmScheme()
     );
+
+    try {
+      await resourceServer.initialize();
+    } catch (err: any) {
+      const msg = `[CredaVer FATAL] Failed to sync with x402 facilitator at ${facilitatorUrl}: ${err.message}`;
+      console.error(msg);
+      throw new Error(msg, { cause: err });
+    }
+
+    // Startup log line listing the scheme and network pairs learned from facilitator
+    try {
+      const supported = await facilitator.getSupported();
+      const pairs = supported.kinds
+        .map((k) => `${k.scheme} on ${k.network} (v${k.x402Version})`)
+        .join(', ');
+      console.log(`[CredaVer] Facilitator sync successful. Learned scheme/network pairs: [${pairs}]`);
+    } catch (err: any) {
+      console.warn(`[CredaVer] Warning: Could not list supported kinds: ${err.message}`);
+    }
 
     const routes: RoutesConfig = {
       '/api/weather': {
@@ -72,7 +99,7 @@ export function createDemoMerchantApp(options: DemoMerchantOptions = {}): Expres
       },
     };
 
-    app.use(paymentMiddleware(routes, resourceServer, undefined, undefined, false));
+    app.use(paymentMiddleware(routes, resourceServer, undefined, undefined, true));
   } else {
     // Test double middleware for deterministic local tests without external network dependencies
     app.use('/api/weather', (req: Request, res: Response, next) => {
@@ -170,11 +197,18 @@ const isDirectRun =
   process.env.RUN_DEMO_MERCHANT === 'true');
 
 if (isDirectRun && process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
-  const PORT = process.env.PORT_DEMO_MERCHANT || 4020;
-  const app = createDemoMerchantApp({ useOfficialResourceServer: true });
-  createServer(app).listen(PORT, () => {
-    console.log(`[CredaVer] ${MERCHANT_NAME} listening on port ${PORT}`);
-    console.log(`[CredaVer] Facilitator: ${OFFICIAL_FACILITATOR_URL}`);
-    console.log(`[CredaVer] PayTo: ${MERCHANT_WALLET} | Network: ${SOLANA_DEVNET_GENESIS}`);
-  });
+  (async () => {
+    const PORT = process.env.PORT_DEMO_MERCHANT || 4020;
+    try {
+      const app = await createDemoMerchantApp({ useOfficialResourceServer: true });
+      createServer(app).listen(PORT, () => {
+        console.log(`[CredaVer] ${MERCHANT_NAME} listening on port ${PORT}`);
+        console.log(`[CredaVer] Facilitator: ${OFFICIAL_FACILITATOR_URL}`);
+        console.log(`[CredaVer] PayTo: ${MERCHANT_WALLET} | Network: ${SOLANA_DEVNET_GENESIS}`);
+      });
+    } catch (err: any) {
+      console.error(`[CredaVer] Aborting startup: ${err.message}`);
+      process.exit(1);
+    }
+  })();
 }

@@ -11,9 +11,9 @@ CredaVer uses **Vitest** for deterministic, sub-second test execution across all
 | `@credaver/x402-guard` | `packages/x402-guard/src/constrained-signer.test.ts` | 5 | **PASS** | **Milestone 1 Constrained Signer Spike S5**: Agent zero-key custody proof, `@solana/kit` partial signing delegation, policy-gated signing, cap violation rejection, unlisted merchant rejection, review threshold gate, and cryptographic proof that agent cannot self-sign. |
 | `apps/web` | `apps/web/src/sign-api.test.ts` | 3 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, and 202 REVIEW with pending audit receipt. |
 | `apps/web` | `apps/web/src/wallet.test.ts` | 4 | **PASS** | Phantom Connect / Wallet Standard challenge generation, Ed25519 challenge signing, server-side signature verification, imposter key rejection, and challenge tampering rejection. |
-| `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 4 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, and unauthorized merchant payment blocking. |
+| `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and **rejection of startup on facilitator sync failure**. |
 
-**Total Verified Tests**: **55 passing tests across 6 test suites (0 failures, 0 skips)**.
+**Total Verified Tests**: **56 passing tests across 6 test suites (0 failures, 0 skips)**.
 
 ---
 
@@ -29,7 +29,7 @@ pnpm test:watch
 
 ---
 
-## Live Solana Devnet S1 Test Harness
+## Live Solana Devnet S1 Test Harness & Verified Settlement Proof
 
 In addition to fast in-memory vitest test doubles, CredaVer includes a live Solana devnet test harness connected to the official `@x402/express` + `@x402/svm` resource server and the public x402 facilitator (`https://x402.org/facilitator`).
 
@@ -40,19 +40,24 @@ pnpm exec tsx scripts/devnet-setup.ts
 ```
 - **Agent Payer (Devnet)**: `HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS` (saved in git-ignored `.devnet-payer.json`)
 - **Demo Merchant (Devnet)**: `D9KxfDqX46pHjs6HdCPrFGkrcEKjP9FAf41pHwkMGbBW` (saved in git-ignored `.devnet-merchant.json`)
+- **Merchant ATA (USDC)**: `8ijvv56h19uPLQfRRNV3HE6hAY4dmjTKPvJTiravSofM`
 - **Devnet USDC Mint**: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
-- **Official Facilitator**: `https://x402.org/facilitator`
+- **Official Facilitator**: `https://x402.org/facilitator` (Fee Payer: `CKPKJWNdJEqa81x7CkZ14BVPiY6y16Sxs7owznqtWYp5`)
+- **Network**: `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`
 
-### Live Devnet Execution
+### Verified On-Chain Settlement
+Run the live runner:
 ```bash
 pnpm exec tsx scripts/execute-s1-devnet-payment.ts
 ```
-When funded with devnet SOL and devnet USDC:
-1. Spins up the demo merchant with official `@x402/express` middleware.
-2. The agent issues a scoped mandate and wraps `fetch` using `ExactSvmScheme` + `CredaverAgentGuard`.
-3. Calls `/api/weather`, gets 402, constructs the devnet SPL transfer transaction, signs as payer, submits to the facilitator.
-4. Facilitator cosigns as fee payer, broadcasts to Solana devnet, and returns the on-chain transaction signature.
-5. The live transaction can be inspected on [Solana Explorer (Devnet)](https://explorer.solana.com/?cluster=devnet).
+
+**Live Devnet Settlement Result**:
+- **Transaction Signature**: `3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg`
+- **Solana Explorer (Devnet)**: [https://explorer.solana.com/tx/3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg?cluster=devnet](https://explorer.solana.com/tx/3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg?cluster=devnet)
+- **Status**: Confirmed on-chain (Slot 506947263, Error: None)
+- **Settlement Amount**: 1.00 USDC (`1,000,000` base units)
+- **Payer ATA**: `CWuZnuu3By5eKQFtXYqAdysT1YK3JLA9LuYwcuZ9GnYm`
+- **Destination Merchant ATA**: `8ijvv56h19uPLQfRRNV3HE6hAY4dmjTKPvJTiravSofM`
 
 ---
 

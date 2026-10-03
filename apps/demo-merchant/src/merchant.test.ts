@@ -22,7 +22,7 @@ describe('S1 x402 on Devnet: Express Server + Client Policy Round Trip', () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    const app = createDemoMerchantApp();
+    const app = await createDemoMerchantApp();
     server = createServer(app);
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => resolve());
@@ -201,5 +201,15 @@ describe('S1 x402 on Devnet: Express Server + Client Policy Round Trip', () => {
     // Policy filters out unauthorized merchant
     const compliant = guard.getPolicy()(paymentRequired.x402Version, paymentRequired.accepts);
     expect(compliant).toHaveLength(0); // Safely halted before payment
+  });
+
+  it('5. Rejects startup if facilitator sync fails', async () => {
+    // Attempting to initialize with an unreachable facilitator URL must throw
+    await expect(
+      createDemoMerchantApp({
+        useOfficialResourceServer: true,
+        facilitatorUrl: 'http://127.0.0.1:9876/unreachable-facilitator',
+      })
+    ).rejects.toThrow(/Failed to sync with x402 facilitator/);
   });
 });

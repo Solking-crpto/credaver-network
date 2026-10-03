@@ -97,10 +97,14 @@ async function main() {
   }
 
   // If funded, proceed with live payment through official x402 resource server
-  console.log('\n[CredaVer] Sufficient devnet funds detected. Starting demo merchant server...');
+  console.log('\n[CredaVer] Sufficient devnet funds detected. Initializing demo merchant server...');
+  console.log(`[CredaVer Debug] Configured network: "${SOLANA_DEVNET_GENESIS}"`);
+  console.log(`[CredaVer Debug] Expected network:   "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"`);
+  console.log(`[CredaVer Debug] Exact match: ${SOLANA_DEVNET_GENESIS === 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'}`);
+
   process.env.MERCHANT_WALLET = merchantData.publicKey;
 
-  const app = createDemoMerchantApp({
+  const app = await createDemoMerchantApp({
     useOfficialResourceServer: true,
     facilitatorUrl: OFFICIAL_FACILITATOR_URL,
   });
@@ -149,11 +153,27 @@ async function main() {
 
     console.log(`Response Status: ${response.status}`);
     const paymentResponseHeader = response.headers.get('payment-response');
+    let txSignature = '';
     if (paymentResponseHeader) {
-      console.log('Payment Response Header:', Buffer.from(paymentResponseHeader, 'base64').toString('utf8'));
+      const decodedPaymentResp = Buffer.from(paymentResponseHeader, 'base64').toString('utf8');
+      console.log('Payment Response Header (Raw JSON):', decodedPaymentResp);
+      try {
+        const parsedResp = JSON.parse(decodedPaymentResp);
+        txSignature = parsedResp.txSignature || parsedResp.transaction || '';
+      } catch {
+        // ignore
+      }
     }
     const responseBody = await response.json();
-    console.log('Response Body:', responseBody);
+    console.log('Response Body:', JSON.stringify(responseBody, null, 2));
+
+    if (txSignature) {
+      console.log('\n========================================================================');
+      console.log('✅ LIVE DEVNET SETTLEMENT CONFIRMED!');
+      console.log(`Tx Signature:    ${txSignature}`);
+      console.log(`Solana Explorer: https://explorer.solana.com/tx/${txSignature}?cluster=devnet`);
+      console.log('========================================================================\n');
+    }
   } finally {
     server.close();
   }
