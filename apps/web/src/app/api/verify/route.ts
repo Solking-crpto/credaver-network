@@ -6,12 +6,40 @@ import {
   DEFAULT_DEVNET_RPC,
 } from '@credaver/core';
 import { getServerStore } from '../../../lib/server-state';
+import { z } from 'zod';
+
+const VerifyQuerySchema = z.object({
+  tx: z.string().min(1).optional(),
+  receiptId: z.string().min(1).optional(),
+});
+
+const VerifyBodySchema = z
+  .object({
+    receipt: z.any().optional(),
+    txSignature: z.string().optional(),
+    expectedReceiptHash: z.string().optional(),
+    receiptId: z.string().optional(),
+  })
+  .refine((data) => !!(data.receipt || data.txSignature || data.receiptId), {
+    message: 'Provide receipt object, txSignature, or receiptId',
+  });
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const tx = searchParams.get('tx');
-    const receiptId = searchParams.get('receiptId');
+    const parseResult = VerifyQuerySchema.safeParse({
+      tx: searchParams.get('tx') || undefined,
+      receiptId: searchParams.get('receiptId') || undefined,
+    });
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'INVALID_QUERY', details: parseResult.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const { tx, receiptId } = parseResult.data;
     const rpcUrl = process.env.SOLANA_RPC_URL || DEFAULT_DEVNET_RPC;
     const store = getServerStore();
 
@@ -66,6 +94,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const parseResult = VerifyBodySchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_REQUEST',
+          message: 'Provide receipt object, txSignature, or receiptId',
+          details: parseResult.error.format(),
+        },
+        { status: 400 }
+      );
+    }
+
     const rpcUrl = process.env.SOLANA_RPC_URL || DEFAULT_DEVNET_RPC;
     const store = getServerStore();
 

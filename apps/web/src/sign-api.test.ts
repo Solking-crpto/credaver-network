@@ -198,4 +198,46 @@ describe('apps/web: POST /api/sign Constrained Signing Route', () => {
     expect(data.reasonCodes).toContain(ReasonCode.HIGH_VALUE_TRANSACTION_REQUIRES_REVIEW);
     expect(data.signature).toBeUndefined();
   });
+
+  it('4. Enforces production fail-loud when Upstash credentials are missing in NODE_ENV=production', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalStore = globalThis.__credaverStore;
+    try {
+      globalThis.__credaverStore = undefined;
+      (process.env as any).NODE_ENV = 'production';
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      expect(() => getServerStore()).toThrowError(/Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN in production/);
+    } finally {
+      (process.env as any).NODE_ENV = originalEnv;
+      globalThis.__credaverStore = originalStore;
+    }
+  });
+
+  it('5. Rate limits rapid requests exceeding threshold returning 429', async () => {
+    // Send 130 requests to trigger rate limit (configured for 120 per minute)
+    let rateLimitedResponse = null;
+    for (let i = 0; i < 130; i++) {
+      const req = new NextRequest('http://localhost:3000/api/sign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '198.51.100.1', // Isolated test IP
+        },
+        body: JSON.stringify({}),
+      });
+      const res = await POST(req);
+      if (res.status === 429) {
+        rateLimitedResponse = res;
+        break;
+      }
+    }
+
+    expect(rateLimitedResponse).not.toBeNull();
+    expect(rateLimitedResponse!.status).toBe(429);
+    const data = await rateLimitedResponse!.json();
+    expect(data.error).toBe('RATE_LIMIT_EXCEEDED');
+    expect(rateLimitedResponse!.headers.get('Retry-After')).toBeDefined();
+  });
 });

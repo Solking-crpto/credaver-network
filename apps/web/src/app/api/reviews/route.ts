@@ -8,6 +8,14 @@ import {
   encodeBase58,
 } from '@credaver/core';
 import { sign } from 'node:crypto';
+import { z } from 'zod';
+
+const ReviewActionSchema = z.object({
+  receiptId: z.string().min(1),
+  action: z.enum(['APPROVE', 'REJECT']),
+  reviewerPubkey: z.string().optional(),
+  reason: z.string().optional(),
+});
 
 export async function GET() {
   try {
@@ -29,15 +37,21 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { receiptId, action, reviewerPubkey, reason } = body;
+    const rawBody = await req.json();
+    const parseResult = ReviewActionSchema.safeParse(rawBody);
 
-    if (!receiptId || !action || (action !== 'APPROVE' && action !== 'REJECT')) {
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: 'INVALID_REQUEST', message: 'Specify receiptId and action ("APPROVE" or "REJECT")' },
+        {
+          error: 'INVALID_REQUEST',
+          message: 'Specify valid receiptId and action ("APPROVE" or "REJECT")',
+          details: parseResult.error.format(),
+        },
         { status: 400 }
       );
     }
+
+    const { receiptId, action, reviewerPubkey, reason } = parseResult.data;
 
     const store = getServerStore();
     const receipt = await store.getReceipt(receiptId);

@@ -15,11 +15,11 @@ CredaVer uses **Vitest** for deterministic, sub-second test execution across all
 | `apps/web` | `apps/web/src/scenarios-api.test.ts` | 8 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), latency measurement, and operator review approval/rejection endpoints. |
 | `apps/web` | `apps/web/src/verify-api.test.ts` | 5 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, and 404/400 handling. |
 | `apps/web` | `apps/web/src/mandates-api.test.ts` | 4 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, and `GET /api/receipts/[id]`. |
-| `apps/web` | `apps/web/src/sign-api.test.ts` | 3 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, and 202 REVIEW with pending audit receipt. |
+| `apps/web` | `apps/web/src/sign-api.test.ts` | 5 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, 202 REVIEW with pending audit receipt, **production fail-loud enforcement without Redis credentials**, and **sliding-window rate limiting with 429 response**. |
 | `apps/web` | `apps/web/src/wallet.test.ts` | 4 | **PASS** | Phantom Connect / Wallet Standard challenge generation, Ed25519 challenge signing, server-side signature verification, imposter key rejection, and challenge tampering rejection. |
 | `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and **rejection of startup on facilitator sync failure**. |
 
-**Total Verified Tests**: **104 passing tests across 12 test suites (0 failures, 0 skips)**.
+**Total Verified Tests**: **106 passing tests across 12 test suites (0 failures, 0 skips)**.
 
 ---
 
@@ -67,19 +67,36 @@ pnpm exec tsx scripts/execute-s1-devnet-payment.ts
 
 ---
 
-## Milestone 1: Spike S5 Constrained Signer Verification
+## Milestone 1: Spike S5 Constrained Signer Verification & Live Settlement
 
 To execute and observe the autonomous agent zero-key custody model:
 ```bash
+# In-memory boundary verification
 pnpm exec tsx scripts/verify-s5-constrained-signer.ts
+
+# Live on-chain Devnet settlement runner with zero-key agent
+pnpm exec tsx scripts/execute-s5-devnet-settlement.ts
 ```
-This runnable script proves:
+
+### Verified Live On-Chain Devnet Settlement (Spike S5)
+* **Status**: **PASSED (100% Live Verified on Solana Devnet)**
+* **Transaction Signature**: `5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF`
+* **Solana Explorer (Devnet)**: [https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet](https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet)
+* **Agent Identity Pubkey**: `AYDjcF3smux6Y5yNo7CqjS3KPNiBhgE2cuVsGqNhMmmr` (holds **ONLY** identity Ed25519 key, **ZERO** access to funding wallet keys)
+* **Funding Wallet (Server Custody)**: `HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS`
+* **Merchant Pubkey**: `D9KxfDqX46pHjs6HdCPrFGkrcEKjP9FAf41pHwkMGbBW`
+* **Settlement Amount**: 1.00 USDC (`1,000,000` base units)
+* **Official Facilitator**: `https://x402.org/facilitator`
+* **Network Genesis**: `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`
+
+### S5 Architectural Invariants Proven
 1. **Agent Zero-Key Custody**: The agent holds only its identity Ed25519 keypair and has NO access to the funding wallet's private key.
 2. **ALLOW Flow**: Agent sends proof of intent within the mandate cap; CredaVer verifies policy, signs the SVM transaction message, issues a signed audit receipt, and increments the cumulative spend ledger.
-3. **DENY on Cap Violation**: Agent attempts payment exceeding `maxPerTx`; CredaVer rejects with 403 `AMOUNT_EXCEEDS_PER_TX_LIMIT`. The transaction is NEVER signed, and cumulative spend remains unchanged.
-4. **DENY on Rogue Merchant**: Agent attempts payment to an unlisted merchant; CredaVer rejects with 403 `MERCHANT_NOT_ALLOWED`.
-5. **REVIEW Gate**: Payment exceeding `reviewThreshold` returns 202 `HIGH_VALUE_TRANSACTION_REQUIRES_REVIEW` and is held pending operator review.
-6. **Bypass Resistance**: If the agent attempts to self-sign the transaction message using its identity key, the signature fails Solana verification against the funding wallet address.
+3. **Live Facilitator Settlement**: The constrained signer successfully interfaces with `@x402/svm` `ExactSvmScheme`, delegating signing to CredaVer and settling on-chain via the official public facilitator.
+4. **DENY on Cap Violation**: Agent attempts payment exceeding `maxPerTx`; CredaVer rejects with 403 `AMOUNT_EXCEEDS_PER_TX_LIMIT`. The transaction is NEVER signed, and cumulative spend remains unchanged.
+5. **DENY on Rogue Merchant**: Agent attempts payment to an unlisted merchant; CredaVer rejects with 403 `MERCHANT_NOT_ALLOWED`.
+6. **REVIEW Gate**: Payment exceeding `reviewThreshold` returns 202 `HIGH_VALUE_TRANSACTION_REQUIRES_REVIEW` and is held pending operator review.
+7. **Bypass Resistance**: If the agent attempts to self-sign the transaction message using its identity key, the signature fails Solana verification against the funding wallet address.
 
 ---
 

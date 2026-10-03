@@ -1,17 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyEd25519 } from '@credaver/core';
+import { z } from 'zod';
+import { checkRateLimit, getClientIp } from '../../../../lib/rate-limit';
+
+const VerifyBodySchema = z
+  .object({
+    pubkey: z.string().min(32).max(44),
+    challenge: z.string().min(1),
+    signatureBase64: z.string().optional(),
+    signatureBase58: z.string().optional(),
+    nonce: z.string().optional(),
+  })
+  .refine((d) => !!(d.signatureBase64 || d.signatureBase58), {
+    message: 'Either signatureBase64 or signatureBase58 is required',
+  });
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { pubkey, signatureBase64, signatureBase58, challenge, nonce } = body;
-
-    if (!pubkey || !challenge || (!signatureBase64 && !signatureBase58)) {
+    const clientIp = getClientIp(req);
+    const rl = checkRateLimit(`auth-verify:${clientIp}`, { windowMs: 60000, maxRequests: 60 });
+    if (!rl.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: pubkey, challenge, and signature' },
+        { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many verify requests. Please slow down.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)) } }
+      );
+    }
+
+    const body = await req.json();
+    const parseResult = VerifyBodySchema.safeParse(body);
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'INVALID_VERIFY_REQUEST', details: parseResult.error.format() },
         { status: 400 }
       );
     }
+
+    const { pubkey, signatureBase64, signatureBase58, challenge } = parseResult.data;
 
     // Convert base64 or base58 signature to Uint8Array
     let sigBytes: Uint8Array;
@@ -22,7 +47,7 @@ export async function POST(req: NextRequest) {
         sigBytes[i] = binaryString.charCodeAt(i);
       }
     } else {
-      sigBytes = Buffer.from(signatureBase58, 'hex');
+      sigBytes = Buffer.from(signatureBase58!, 'hex');
     }
 
     // Server-side Ed25519 signature verification

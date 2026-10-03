@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerStore } from '../../../../../lib/server-state';
+import { z } from 'zod';
+
+const RevokeBodySchema = z.object({
+  reason: z.string().max(500).optional(),
+});
 
 export async function POST(
   req: NextRequest,
@@ -7,8 +12,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const body = await req.json().catch(() => ({}));
-    const reason = body.reason || 'Operator revocation via CredaVer Console';
+    const rawBody = await req.json().catch(() => ({}));
+    const parseResult = RevokeBodySchema.safeParse(rawBody);
+    const reason =
+      (parseResult.success ? parseResult.data.reason : null) ||
+      'Operator revocation via CredaVer Console';
 
     const store = getServerStore();
     const existing = await store.getMandate(id);

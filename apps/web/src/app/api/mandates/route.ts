@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignedMandateSchema, verifySignedMandate } from '@credaver/core';
 import { getServerStore } from '../../../lib/server-state';
+import { z } from 'zod';
+
+const MandatesQuerySchema = z.object({
+  operatorPubkey: z.string().optional(),
+  agentPubkey: z.string().optional(),
+  revoked: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -69,10 +76,21 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const operatorPubkey = searchParams.get('operatorPubkey') || undefined;
-    const agentPubkey = searchParams.get('agentPubkey') || undefined;
-    const revokedParam = searchParams.get('revoked');
-    const revoked = revokedParam !== null ? revokedParam === 'true' : undefined;
+    const parseResult = MandatesQuerySchema.safeParse({
+      operatorPubkey: searchParams.get('operatorPubkey') || undefined,
+      agentPubkey: searchParams.get('agentPubkey') || undefined,
+      revoked: searchParams.get('revoked') || undefined,
+    });
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'INVALID_QUERY', details: parseResult.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const { operatorPubkey, agentPubkey, revoked: revokedParam } = parseResult.data;
+    const revoked = revokedParam !== undefined ? revokedParam === 'true' : undefined;
 
     const store = getServerStore();
     const mandates = await store.listMandates({

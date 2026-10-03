@@ -237,6 +237,25 @@ export default function HomePage() {
           </Button>
         </div>
 
+        {/* Honesty Disclosure Banner */}
+        <div className="p-3.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-xs text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <span className="font-bold text-credav-cyan uppercase tracking-wider shrink-0 mt-0.5">Honesty Audit:</span>
+            <p className="text-slate-300 leading-relaxed">
+              Policy evaluations (all 12 gates, Ed25519 signatures, RFC 8785 hashes, and operator review queues) are <strong className="text-white">100% REAL</strong>. The in-browser dashboard scenarios use <strong className="text-amber-300">SIMULATED SVM bytes</strong> to ensure instant sub-10ms feedback without spending judge faucet funds. For verified real on-chain Devnet settlement, see Spike S5 below.
+            </p>
+          </div>
+          <Link
+            href="https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet"
+            target="_blank"
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-xs hover:bg-emerald-500/20 transition-colors"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>REAL S5 DEVNET TX</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+
         {/* 6 Scenario Buttons Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* Scenario 1: ALLOW */}
@@ -248,14 +267,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-emerald-400">1. Normal Payment</span>
-              <StatusChip status="ALLOW" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="amber" className="text-[10px] py-0 px-1.5">SIMULATED SVM</Badge>
+                <StatusChip status="ALLOW" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Payment under cap to listed merchant. Signs tx message, records spend, and returns signed receipt.
+              Payment under cap to listed merchant. Real policy evaluation passes; signs tx message, records spend, and returns signed receipt.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['ALLOW'] ? `Latency: ${scenarioResults['ALLOW'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['ALLOW'] ? `Latency: ${scenarioResults['ALLOW'].latencyMs}ms` : 'REAL POLICY ENGINE'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />
@@ -272,14 +294,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-rose-400">2. Exceeds Cap</span>
-              <StatusChip status="DENY" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="muted" className="text-[10px] py-0 px-1.5">SIMULATED AGENT</Badge>
+                <StatusChip status="DENY" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Agent requests payment exceeding total mandate cap. Fails closed with 403 AMOUNT_EXCEEDS_CAP.
+              Agent requests payment exceeding total mandate cap. Real policy engine fails closed with 403 AMOUNT_EXCEEDS_CAP.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['OVER_CAP'] ? `Latency: ${scenarioResults['OVER_CAP'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['OVER_CAP'] ? `Latency: ${scenarioResults['OVER_CAP'].latencyMs}ms` : 'REAL POLICY DENY'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />
@@ -296,14 +321,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-rose-400">3. Revoked Mandate</span>
-              <StatusChip status="DENY" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="muted" className="text-[10px] py-0 px-1.5">SIMULATED AGENT</Badge>
+                <StatusChip status="DENY" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Operator revokes mandate; subsequent agent requests immediately fail with 403 REVOKED_MANDATE.
+              Operator revokes mandate; subsequent agent requests immediately fail closed with 403 REVOKED_MANDATE.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['REVOKED'] ? `Latency: ${scenarioResults['REVOKED'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['REVOKED'] ? `Latency: ${scenarioResults['REVOKED'].latencyMs}ms` : 'REAL POLICY DENY'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />
@@ -320,14 +348,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-rose-400">4. Expired Mandate</span>
-              <StatusChip status="DENY" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="muted" className="text-[10px] py-0 px-1.5">SIMULATED AGENT</Badge>
+                <StatusChip status="DENY" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Validity window has lapsed. Deterministic gate rejects agent with 403 EXPIRED_MANDATE.
+              Validity window has lapsed. Deterministic gate rejects agent request with 403 EXPIRED_MANDATE.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['EXPIRED'] ? `Latency: ${scenarioResults['EXPIRED'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['EXPIRED'] ? `Latency: ${scenarioResults['EXPIRED'].latencyMs}ms` : 'REAL POLICY DENY'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />
@@ -344,14 +375,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-rose-400">5. Replay Attack</span>
-              <StatusChip status="DENY" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="muted" className="text-[10px] py-0 px-1.5">SIMULATED AGENT</Badge>
+                <StatusChip status="DENY" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Same proof nonce transmitted twice. Atomic SET NX EX rejects duplicate with REPLAY_DETECTED.
+              Same proof nonce transmitted twice. Atomic SET NX EX rejects duplicate attempt with 403 REPLAY_DETECTED.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['REPLAY'] ? `Latency: ${scenarioResults['REPLAY'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['REPLAY'] ? `Latency: ${scenarioResults['REPLAY'].latencyMs}ms` : 'REAL POLICY DENY'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />
@@ -368,14 +402,17 @@ export default function HomePage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono font-bold text-amber-400">6. Human Review Gate</span>
-              <StatusChip status="REVIEW" />
+              <div className="flex items-center gap-1.5">
+                <Badge variant="cyan" className="text-[10px] py-0 px-1.5">REAL QUEUE</Badge>
+                <StatusChip status="REVIEW" />
+              </div>
             </div>
             <p className="text-xs text-slate-300">
-              Payment exceeds review threshold. Held with 202 REVIEW awaiting operator console approval.
+              Payment exceeds review threshold. Held with 202 REVIEW in operator review queue for manual approval/rejection.
             </p>
             <div className="mt-3 flex items-center justify-between pt-2 border-t border-credav-border/30 text-[11px] font-mono">
               <span className="text-slate-400">
-                {scenarioResults['REVIEW'] ? `Latency: ${scenarioResults['REVIEW'].latencyMs}ms` : 'Ready to test'}
+                {scenarioResults['REVIEW'] ? `Latency: ${scenarioResults['REVIEW'].latencyMs}ms` : 'REAL OPERATOR QUEUE'}
               </span>
               <span className="text-credav-cyan flex items-center gap-0.5">
                 Run <ChevronRight className="w-3 h-3" />

@@ -9,6 +9,8 @@ import {
 } from '@credaver/core';
 import { getServerStore, getServerPayerKeypair } from '../../../lib/server-state';
 
+import { z } from 'zod';
+
 export type ScenarioType =
   | 'ALLOW'
   | 'OVER_CAP'
@@ -17,11 +19,27 @@ export type ScenarioType =
   | 'REPLAY'
   | 'REVIEW';
 
+const ScenarioBodySchema = z.object({
+  scenario: z.enum(['ALLOW', 'OVER_CAP', 'REVOKED', 'EXPIRED', 'REPLAY', 'REVIEW']),
+});
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
-    const body = await req.json();
-    const scenario: ScenarioType = body.scenario;
+    const rawBody = await req.json();
+    const parseResult = ScenarioBodySchema.safeParse(rawBody);
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_SCENARIO_REQUEST',
+          details: parseResult.error.format(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const { scenario } = parseResult.data;
     const store = getServerStore();
     const payerKeypair = getServerPayerKeypair();
 

@@ -5,9 +5,29 @@ import {
   SignedMandateSchema,
 } from '@credaver/core';
 import { getServerStore, getServerPaymentKey, getServerPayerKeypair } from '../../../lib/server-state';
+import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = getClientIp(req);
+    const rl = checkRateLimit(`sign:${clientIp}`, { windowMs: 60000, maxRequests: 120 });
+    if (!rl.success) {
+      return NextResponse.json(
+        {
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many signing requests. Please throttle agent requests.',
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
+            'X-RateLimit-Limit': String(rl.limit),
+            'X-RateLimit-Remaining': String(rl.remaining),
+          },
+        }
+      );
+    }
+
     const rawBody = await req.json();
     const parseResult = SignRequestSchema.safeParse(rawBody);
 

@@ -117,9 +117,10 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
       }),
     });
     const approveRes = await reviewsPostRoute(approveReq);
-    expect(approveRes.status).toBe(200);
+    expect(approveRes).toBeDefined();
+    expect(approveRes!.status).toBe(200);
 
-    const approveData = await approveRes.json();
+    const approveData = await approveRes!.json();
     expect(approveData.action).toBe('APPROVE');
     expect(approveData.decision).toBe('ALLOW');
     expect(approveData.signature).toBeDefined();
@@ -146,9 +147,10 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
       }),
     });
     const rejectRes = await reviewsPostRoute(rejectReq);
-    expect(rejectRes.status).toBe(200);
+    expect(rejectRes).toBeDefined();
+    expect(rejectRes!.status).toBe(200);
 
-    const rejectData = await rejectRes.json();
+    const rejectData = await rejectRes!.json();
     expect(rejectData.action).toBe('REJECT');
     expect(rejectData.decision).toBe('DENY');
     expect(rejectData.reasonCodes).toContain(ReasonCode.OPERATOR_REJECTED);

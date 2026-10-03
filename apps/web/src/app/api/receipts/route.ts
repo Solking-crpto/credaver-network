@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerStore } from '../../../lib/server-state';
+import { z } from 'zod';
+
+const ReceiptsQuerySchema = z.object({
+  agentPubkey: z.string().optional(),
+  merchantPubkey: z.string().optional(),
+  decision: z.enum(['ALLOW', 'DENY', 'REVIEW']).optional(),
+});
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const agentPubkey = searchParams.get('agentPubkey') || undefined;
-    const merchantPubkey = searchParams.get('merchantPubkey') || undefined;
-    const decisionParam = searchParams.get('decision');
-    const decision =
-      decisionParam === 'ALLOW' || decisionParam === 'DENY' || decisionParam === 'REVIEW'
-        ? decisionParam
-        : undefined;
+    const parseResult = ReceiptsQuerySchema.safeParse({
+      agentPubkey: searchParams.get('agentPubkey') || undefined,
+      merchantPubkey: searchParams.get('merchantPubkey') || undefined,
+      decision: searchParams.get('decision') || undefined,
+    });
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'INVALID_QUERY', details: parseResult.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const { agentPubkey, merchantPubkey, decision } = parseResult.data;
 
     const store = getServerStore();
     const receipts = await store.listReceipts({

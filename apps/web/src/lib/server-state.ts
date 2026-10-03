@@ -18,6 +18,11 @@ export function getServerStore(): ICredaverStore {
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
     } else {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          '[CredaVer Configuration Error] Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN in production. Silent in-memory fallback is disabled in production to guarantee multi-instance replay safety and audit persistence.'
+        );
+      }
       globalThis.__credaverStore = new MemoryStore();
     }
   }
