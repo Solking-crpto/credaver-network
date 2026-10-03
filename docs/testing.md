@@ -7,15 +7,19 @@ CredaVer uses **Vitest** for deterministic, sub-second test execution across all
 | Package / App | Test File | Tests Run | Result | Key Invariants Verified |
 |---|---|---|---|---|
 | `@credaver/core` | `packages/core/src/core.test.ts` | 34 | **PASS** | RFC 8785 JCS canonicalization, Ed25519 keypair generation, Base58 encode/decode, Mandate mutual signing/verification, Request-bound proofs, 12 Policy Engine gates (ALLOW, DENY reason codes, REVIEW thresholds), Sequential Replay, Concurrent Atomic Replay Race (Promise.all), and 13 boundary tests. |
+| `@credaver/core` | `packages/core/src/state-machine.test.ts` | 16 | **PASS** | **Milestone 3 State Machines & Audit Log**: Mandate lifecycle (`DRAFT` -> `ACTIVE` -> `REVOKED` | `EXPIRED` | `DEPLETED`), disallowed transitions throwing `InvalidStateTransitionError`, Request lifecycle, 14 standardized reason codes, and chronological audit trail. |
+| `@credaver/core` | `packages/core/src/anchor.test.ts` | 11 | **PASS** | **Milestone 4 On-Chain Memo Anchoring**: SPL Memo payload assembly (`credav:1:...`), wire transaction serializer, Devnet RPC memo extraction, and complete multi-badge receipt verification. |
+| `@credaver/core` | `packages/core/src/persistence.test.ts` | 4 | **PASS** | **Milestone 2 Dual Adapters & Lifecycle**: In-memory and Redis REST CRUD, mandate revocation immediate policy rejection (`REVOKED_MANDATE`), receipt filtering, audit log, and atomic `SET NX EX` concurrency race. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/guard.test.ts` | 5 | **PASS** | `createCredaverClientPolicy` filter for `x402Client.registerPolicy()`, enforcement of allowed assets/merchants/networks/caps, `CredaverAgentGuard` pre-authorization flow, and cumulative spend ledger tracking. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/constrained-signer.test.ts` | 5 | **PASS** | **Milestone 1 Constrained Signer Spike S5**: Agent zero-key custody proof, `@solana/kit` partial signing delegation, policy-gated signing, cap violation rejection, unlisted merchant rejection, review threshold gate, and cryptographic proof that agent cannot self-sign. |
-| `@credaver/core` | `packages/core/src/persistence.test.ts` | 4 | **PASS** | **Milestone 2 Dual Adapters & Lifecycle**: In-memory and Redis REST CRUD, mandate revocation immediate policy rejection (`REVOKED_MANDATE`), receipt filtering, audit log, and atomic `SET NX EX` concurrency race. |
+| `apps/web` | `apps/web/src/scenarios-api.test.ts` | 8 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), latency measurement, and operator review approval/rejection endpoints. |
+| `apps/web` | `apps/web/src/verify-api.test.ts` | 5 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, and 404/400 handling. |
 | `apps/web` | `apps/web/src/mandates-api.test.ts` | 4 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, and `GET /api/receipts/[id]`. |
 | `apps/web` | `apps/web/src/sign-api.test.ts` | 3 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, and 202 REVIEW with pending audit receipt. |
 | `apps/web` | `apps/web/src/wallet.test.ts` | 4 | **PASS** | Phantom Connect / Wallet Standard challenge generation, Ed25519 challenge signing, server-side signature verification, imposter key rejection, and challenge tampering rejection. |
 | `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and **rejection of startup on facilitator sync failure**. |
 
-**Total Verified Tests**: **64 passing tests across 8 test suites (0 failures, 0 skips)**.
+**Total Verified Tests**: **104 passing tests across 12 test suites (0 failures, 0 skips)**.
 
 ---
 
