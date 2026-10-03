@@ -56,16 +56,16 @@ export const Navigation: React.FC = () => {
 
         {/* Navigation links */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
-          <Link href="#mandates" className="hover:text-credav-cyan transition-colors">
+          <Link href="/#mandates" className="hover:text-credav-cyan transition-colors">
             Agent Mandates
           </Link>
-          <Link href="#policy" className="hover:text-credav-cyan transition-colors">
-            Policy Engine
-          </Link>
-          <Link href="#receipts" className="hover:text-credav-cyan transition-colors">
+          <Link href="/#receipts" className="hover:text-credav-cyan transition-colors">
             Receipts
           </Link>
-          <Link href="#spikes" className="hover:text-credav-cyan transition-colors">
+          <Link href="/verify" className="hover:text-credav-cyan text-emerald-400 font-semibold transition-colors flex items-center gap-1">
+            <span>⚓</span> Verify Anchor
+          </Link>
+          <Link href="/#spikes" className="hover:text-credav-cyan transition-colors">
             Technical Spikes
           </Link>
         </nav>

@@ -1,0 +1,136 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { GET as verifyGetRoute, POST as verifyPostRoute } from './app/api/verify/route';
+import {
+  generateEd25519Keypair,
+  issueSignedReceipt,
+  SignedReceipt,
+  SPL_MEMO_PROGRAM_ID,
+} from '@credaver/core';
+import { getServerStore } from './lib/server-state';
+
+describe('apps/web: /api/verify Verification Endpoints', () => {
+  let operator: ReturnType<typeof generateEd25519Keypair>;
+  let agent: ReturnType<typeof generateEd25519Keypair>;
+  let merchant: ReturnType<typeof generateEd25519Keypair>;
+  let receipt: SignedReceipt;
+
+  beforeEach(async () => {
+    operator = generateEd25519Keypair();
+    agent = generateEd25519Keypair();
+    merchant = generateEd25519Keypair();
+
+    receipt = issueSignedReceipt(
+      {
+        receiptId: `rcpt-test-verify-${Date.now()}`,
+        mandateHash: 'a'.repeat(64),
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: `nonce-${Date.now()}`,
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: operator.publicKey,
+      },
+      operator.secretKey,
+      'mockTxSignature123'
+    );
+
+    const store = getServerStore();
+    await store.saveReceipt(receipt);
+  });
+
+  it('1. GET /api/verify?receiptId=<id> verifies stored receipt', async () => {
+    const req = new NextRequest(
+      `http://localhost:3000/api/verify?receiptId=${receipt.receiptId}`
+    );
+    const res = await verifyGetRoute(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.type).toBe('RECEIPT');
+    expect(data.receipt.receiptId).toBe(receipt.receiptId);
+    expect(data.verification.badges.hashMatches).toBe(true);
+    expect(data.verification.badges.authorityValid).toBe(true);
+  });
+
+  it('2. POST /api/verify verifies direct JSON receipt payload', async () => {
+    const req = new NextRequest('http://localhost:3000/api/verify', {
+      method: 'POST',
+      body: JSON.stringify({ receipt }),
+    });
+    const res = await verifyPostRoute(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.type).toBe('RECEIPT');
+    expect(data.verification.badges.hashMatches).toBe(true);
+    expect(data.verification.badges.authorityValid).toBe(true);
+  });
+
+  it('3. GET /api/verify returns 404 for non-existent receiptId', async () => {
+    const req = new NextRequest(
+      'http://localhost:3000/api/verify?receiptId=non-existent-9999'
+    );
+    const res = await verifyGetRoute(req);
+    expect(res.status).toBe(404);
+
+    const data = await res.json();
+    expect(data.error).toBe('RECEIPT_NOT_FOUND');
+  });
+
+  it('4. GET /api/verify returns 400 when missing query parameters', async () => {
+    const req = new NextRequest('http://localhost:3000/api/verify');
+    const res = await verifyGetRoute(req);
+    expect(res.status).toBe(400);
+
+    const data = await res.json();
+    expect(data.error).toBe('MISSING_PARAM');
+  });
+
+  it('5. POST /api/verify inspects on-chain transaction signature and links receipt', async () => {
+    const mockTx = {
+      slot: 506955056,
+      blockTime: 1727950000,
+      transaction: {
+        message: {
+          instructions: [
+            {
+              program: 'spl-memo',
+              programId: SPL_MEMO_PROGRAM_ID,
+              parsed: `credav:1:aaaaaaaa:${receipt.receiptHash}:ALLOW`,
+            },
+          ],
+        },
+      },
+    };
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ jsonrpc: '2.0', id: 1, result: mockTx }),
+    })) as any;
+
+    try {
+      const req = new NextRequest('http://localhost:3000/api/verify', {
+        method: 'POST',
+        body: JSON.stringify({ txSignature: 'mockTxSignature123' }),
+      });
+      const res = await verifyPostRoute(req);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.type).toBe('TRANSACTION');
+      expect(data.onChain.isValid).toBe(true);
+      expect(data.onChain.slot).toBe(506955056);
+      expect(data.linkedReceipt).toBeDefined();
+      expect(data.linkedReceipt.receiptId).toBe(receipt.receiptId);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});

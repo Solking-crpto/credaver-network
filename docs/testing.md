@@ -116,3 +116,30 @@ Covers:
    - Audit events appended on every transition and mutation.
    - Inspectable chronological queries via `ICredaverStore.listAuditEvents`.
 
+---
+
+## Milestone 4: Solana Devnet Memo Receipt Anchoring & Verification
+
+Run the test suites:
+```bash
+pnpm test packages/core/src/anchor.test.ts apps/web/src/verify-api.test.ts
+```
+
+### Verified On-Chain Anchored Memo Transaction
+- **SPL Memo Program ID**: `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`
+- **Anchored Memo Transaction Signature**: `3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ`
+- **Confirmed Devnet Slot**: `506955056` (Status: `finalized`)
+- **Explorer Link**: [https://explorer.solana.com/tx/3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ?cluster=devnet](https://explorer.solana.com/tx/3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ?cluster=devnet)
+- **Memo Payload**: `credav:1:testman1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:ALLOW`
+
+### Public Verification Portal
+- **Web Portal Route**: `/verify` (`apps/web/src/app/verify/page.tsx`)
+- **API Endpoint**: `GET /api/verify?tx=<signature>` or `POST /api/verify` with `{ receipt: SignedReceipt }`
+- **Features Tested**:
+  1. Cryptographic canonical RFC 8785 hash recomputation against `receiptHash`.
+  2. CredaVer authority Ed25519 signature validation.
+  3. Solana Devnet SPL Memo extraction from `transaction.message.instructions` and `meta.logMessages`.
+  4. Real-time visual badge grid: Hash Matches, Authority Signature Valid, Devnet Memo Match, Confirmed Slot.
+  5. 1-click test presets for hackathon judges to verify real on-chain transactions directly.
+
+

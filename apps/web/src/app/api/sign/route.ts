@@ -4,7 +4,7 @@ import {
   evaluateAndSignTransaction,
   SignedMandateSchema,
 } from '@credaver/core';
-import { getServerStore, getServerPaymentKey } from '../../../lib/server-state';
+import { getServerStore, getServerPaymentKey, getServerPayerKeypair } from '../../../lib/server-state';
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,14 +47,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const paymentSecretKey = getServerPaymentKey();
+    const payerKeypair = getServerPayerKeypair();
+    const shouldAnchor =
+      req.nextUrl.searchParams.get('anchor') === 'true' ||
+      process.env.ANCHOR_ON_CHAIN === 'true';
 
     const signResult = await evaluateAndSignTransaction({
       mandate,
       proof,
       transactionMessageBytes,
       store,
-      paymentSecretKey,
+      paymentSecretKey: payerKeypair.secretKey,
+      payerPubkey: payerKeypair.publicKey,
+      anchorOnChain: shouldAnchor,
     });
 
     if (signResult.decision === 'ALLOW') {

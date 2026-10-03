@@ -6,6 +6,7 @@ import { SignedPaymentProof, SignedPaymentProofSchema } from './proof.js';
 import { evaluatePaymentPolicy, PolicyDecisionType, ReasonCodeType } from './policy.js';
 import { issueSignedReceipt, SignedReceipt } from './receipt.js';
 import { ICredaverStore } from './store/index.js';
+import { anchorReceiptOnChain } from './anchor.js';
 
 export const SignRequestSchema = z.object({
   mandateHash: z.string(),
@@ -43,9 +44,12 @@ export interface EvaluateAndSignOptions {
   transactionMessageBytes: Uint8Array | string;
   store: ICredaverStore;
   paymentSecretKey: Uint8Array | string;
+  payerPubkey?: string;
   authoritySecretKey?: Uint8Array | string;
   authorityPubkey?: string;
   now?: number;
+  anchorOnChain?: boolean;
+  rpcUrl?: string;
 }
 
 /**
@@ -112,6 +116,22 @@ export async function evaluateAndSignTransaction(
     const sigBuffer = sign(null, msgBytes, privKey);
     const signatureBytes = new Uint8Array(sigBuffer);
     const signature = encodeBase58(signatureBytes);
+
+    // Optional on-chain SPL memo anchoring
+    if (options.anchorOnChain && options.payerPubkey) {
+      try {
+        const anchorRes = await anchorReceiptOnChain(
+          signedReceipt,
+          options.payerPubkey,
+          options.paymentSecretKey,
+          options.rpcUrl
+        );
+        signedReceipt.onChainTxSignature = anchorRes.txSignature;
+        await store.saveReceipt(signedReceipt);
+      } catch (err: any) {
+        console.warn('[CredaVer] Notice: devnet memo anchoring skipped or failed:', err.message);
+      }
+    }
 
     return {
       decision: 'ALLOW',

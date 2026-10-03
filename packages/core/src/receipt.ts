@@ -25,6 +25,7 @@ export type ReceiptBody = z.infer<typeof ReceiptBodySchema>;
 export const SignedReceiptSchema = ReceiptBodySchema.extend({
   receiptHash: z.string().length(64),
   authoritySignature: z.string().min(64),
+  onChainTxSignature: z.string().optional().nullable(),
 });
 
 export type SignedReceipt = z.infer<typeof SignedReceiptSchema>;
@@ -39,7 +40,8 @@ export function computeReceiptHash(body: ReceiptBody): string {
  */
 export function issueSignedReceipt(
   body: ReceiptBody,
-  authoritySecretKey: string | Uint8Array
+  authoritySecretKey: string | Uint8Array,
+  onChainTxSignature?: string | null
 ): SignedReceipt {
   const validated = ReceiptBodySchema.parse(body);
   const receiptHash = computeReceiptHash(validated);
@@ -50,6 +52,7 @@ export function issueSignedReceipt(
     ...validated,
     receiptHash,
     authoritySignature,
+    onChainTxSignature: onChainTxSignature ?? null,
   });
 }
 
@@ -57,6 +60,7 @@ export interface ReceiptVerificationResult {
   isValid: boolean;
   error?: string;
   receiptHash?: string;
+  onChainTxSignature?: string | null;
 }
 
 /**
@@ -115,5 +119,6 @@ export function verifySignedReceipt(receipt: unknown): ReceiptVerificationResult
   return {
     isValid: true,
     receiptHash: r.receiptHash,
+    onChainTxSignature: r.onChainTxSignature ?? null,
   };
 }

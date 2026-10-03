@@ -55,3 +55,27 @@ export function getServerPaymentKey(): string {
   }
   return globalThis.__credaverFallbackKey;
 }
+
+export function getServerPayerKeypair(): { publicKey: string; secretKey: string } {
+  const possiblePaths = [
+    path.resolve(process.cwd(), '.devnet-payer.json'),
+    path.resolve(process.cwd(), '../../.devnet-payer.json'),
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (data.secretKey && data.publicKey) {
+          return { publicKey: data.publicKey, secretKey: data.secretKey };
+        }
+      } catch {
+        // Continue
+      }
+    }
+  }
+
+  const secretKey = getServerPaymentKey();
+  return { publicKey: 'HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS', secretKey };
+}
+
