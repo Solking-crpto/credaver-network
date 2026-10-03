@@ -6,8 +6,8 @@ import {
   decodeBase58,
   encodeBase58,
   createPrivateKeyFromRaw,
-  createPublicKey,
 } from '@credaver/core';
+import { createPublicKey } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
