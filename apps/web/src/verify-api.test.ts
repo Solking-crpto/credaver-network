@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as verifyGetRoute, POST as verifyPostRoute } from './app/api/verify/route';
 import { GET as authorityGetRoute } from './app/api/authority/route';
+import { GET as receiptsGetRoute } from './app/api/receipts/route';
 import {
   generateEd25519Keypair,
   issueSignedReceipt,
@@ -182,4 +183,82 @@ describe('apps/web: /api/verify Verification Endpoints', () => {
     expect(data.verification.badges.authorityValid).toBe(true);
     expect(data.verification.error).toContain('UNKNOWN SIGNER');
   });
+
+  it('8. Flow "Verify my latest receipt": fetches from /api/receipts and verifies against deployment authority', async () => {
+    // Save a fresh deployment receipt to store
+    const authority = getServerReceiptAuthorityKeypair();
+    const cleanReceipt = issueSignedReceipt(
+      {
+        receiptId: `rcpt-test-verify-latest-${Date.now()}`,
+        mandateHash: 'c'.repeat(64),
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: `nonce-latest-${Date.now()}`,
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now() + 5000,
+        authorityPubkey: authority.publicKey,
+      },
+      authority.secretKey
+    );
+    const store = getServerStore();
+    await store.saveReceipt(cleanReceipt);
+
+    // 1. Fetch latest receipt from /api/receipts
+    const listReq = new NextRequest('http://localhost:3000/api/receipts');
+    const listRes = await receiptsGetRoute(listReq);
+    expect(listRes.status).toBe(200);
+
+    const listData = await listRes.json();
+    expect(listData.receipts).toBeDefined();
+    expect(listData.receipts.length).toBeGreaterThan(0);
+
+    // Pick the most recent receipt
+    const latestReceipt = listData.receipts.sort(
+      (a: any, b: any) => (b.issuedAt || 0) - (a.issuedAt || 0)
+    )[0];
+    expect(latestReceipt.receiptId).toBe(cleanReceipt.receiptId);
+
+    // 2. Post to /api/verify
+    const verifyReq = new NextRequest('http://localhost:3000/api/verify', {
+      method: 'POST',
+      body: JSON.stringify({ receipt: latestReceipt }),
+    });
+    const verifyRes = await verifyPostRoute(verifyReq);
+    expect(verifyRes.status).toBe(200);
+
+    const verifyData = await verifyRes.json();
+    expect(verifyData.type).toBe('RECEIPT');
+    expect(verifyData.verification.isValid).toBe(true);
+    expect(verifyData.verification.signerStatus).toBe('SIGNED BY CREDAVER AUTHORITY');
+    expect(verifyData.verification.badges.isConfiguredAuthority).toBe(true);
+    expect(verifyData.verification.badges.hashMatches).toBe(true);
+    expect(verifyData.verification.badges.authorityValid).toBe(true);
+  });
+
+  it('9. Tampered receipt fails with hash mismatch and isValid: false', async () => {
+    const listRes = await receiptsGetRoute(new NextRequest('http://localhost:3000/api/receipts'));
+    const listData = await listRes.json();
+    const original = listData.receipts[0];
+
+    // Tamper with the amount field without re-signing
+    const tampered = { ...original, amount: '999999999' };
+
+    const verifyReq = new NextRequest('http://localhost:3000/api/verify', {
+      method: 'POST',
+      body: JSON.stringify({ receipt: tampered }),
+    });
+    const verifyRes = await verifyPostRoute(verifyReq);
+    expect(verifyRes.status).toBe(200);
+
+    const verifyData = await verifyRes.json();
+    expect(verifyData.verification.isValid).toBe(false);
+    expect(verifyData.verification.badges.hashMatches).toBe(false);
+    expect(verifyData.verification.error).toContain('Receipt hash mismatch');
+  });
 });
+

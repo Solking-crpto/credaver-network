@@ -18,7 +18,7 @@ import {
   encodeBase58,
   signEd25519,
   generateEd25519Keypair,
-} from '@credaver/core';
+} from '../packages/core/src/index.js';
 
 export const DEVNET_RPC = 'https://api.devnet.solana.com';
 export const MAX_TRANSFER_SOL = 0.5;
@@ -241,11 +241,16 @@ export function loadSenderKeypair(): { publicKey: string; secretKey: string } {
 }
 
 async function runCli(): Promise<void> {
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const isDryRun = rawArgs.includes('--dry-run');
+  const args = rawArgs.filter((a) => a !== '--dry-run');
   const destination = args[0];
   const amountStr = args[1];
 
   console.log('--- CredaVer Devnet SOL Transfer Utility ---');
+  if (isDryRun) {
+    console.log('[DRY-RUN MODE ACTIVATED] Validating inputs & checking balances only. No transactions will be broadcast.');
+  }
   console.log(`Target Network: Solana Devnet (${DEVNET_RPC})`);
   console.log(`Safety Limits : Max ${MAX_TRANSFER_SOL} SOL/run | Min Reserve ${MIN_RESERVE_SOL} SOL`);
 
@@ -274,6 +279,30 @@ async function runCli(): Promise<void> {
   console.log(`Recipient     : ${validated.destination}`);
   console.log(`Recip. Balance: ${recipientBalanceSol} SOL`);
   console.log(`Transferring  : ${validated.amountSol} SOL (${validated.lamports} lamports)...`);
+
+  if (isDryRun) {
+    const estimatedFeeLamports = 5000n;
+    const projectedSenderLamports = senderBalanceLamports - validated.lamports - estimatedFeeLamports;
+    const projectedRecipientLamports = recipientBalanceLamports + validated.lamports;
+    const projectedSenderSol = (Number(projectedSenderLamports) / Number(LAMPORTS_PER_SOL)).toFixed(4);
+    const projectedRecipientSol = (Number(projectedRecipientLamports) / Number(LAMPORTS_PER_SOL)).toFixed(4);
+
+    console.log('\n--- [DRY-RUN] Simulation Summary ---');
+    console.log(`Action          : SystemProgram Transfer`);
+    console.log(`Network         : Solana Devnet (${DEVNET_RPC})`);
+    console.log(`Sender Address  : ${senderKeypair.publicKey}`);
+    console.log(`Recipient Address: ${validated.destination}`);
+    console.log(`Transfer Amount : ${validated.amountSol} SOL (${validated.lamports} lamports)`);
+    console.log(`Estimated Fee   : 0.000005 SOL (5000 lamports)`);
+    console.log(`Current Sender  : ${senderBalanceSol} SOL`);
+    console.log(`Current Recipient: ${recipientBalanceSol} SOL`);
+    console.log(`Projected Sender: ${projectedSenderSol} SOL`);
+    console.log(`Projected Recip : ${projectedRecipientSol} SOL`);
+    console.log(`Safety Reserve  : ${MIN_RESERVE_SOL} SOL required -> ${(Number(projectedSenderLamports) / Number(LAMPORTS_PER_SOL)).toFixed(4)} SOL remaining (PASS)`);
+    console.log(`Transfer Cap    : ${MAX_TRANSFER_SOL} SOL max -> ${validated.amountSol} SOL requested (PASS)`);
+    console.log('\n[DRY-RUN COMPLETE] All validation and safety rules PASSED. No transactions broadcast.');
+    return;
+  }
 
   // 5. Get recent blockhash
   const bhResult = await solanaRpc(DEVNET_RPC, 'getLatestBlockhash', [{ commitment: 'finalized' }]);

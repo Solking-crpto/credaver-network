@@ -10,8 +10,8 @@
  * the CredaVer Policy Decision & Signing service.
  */
 
-import { generateEd25519Keypair, issueSignedMandate, SignedMandate } from '@credaver/core';
-import { CredaverConstrainedSigner, createCredaverClientPolicy } from '@credaver/x402-guard';
+import { generateEd25519Keypair, issueSignedMandate, SignedMandate } from '../../packages/core/src/index.js';
+import { CredaverConstrainedSigner, createCredaverClientPolicy } from '../../packages/x402-guard/src/index.js';
 import { x402Client } from '@x402/core/client';
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { ExactSvmScheme } from '@x402/svm';

@@ -92,6 +92,7 @@ function VerifyContent() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [configuredAuthority, setConfiguredAuthority] = useState<string | null>(null);
+  const [isVerifyingLatest, setIsVerifyingLatest] = useState(false);
 
   // Fetch configured authority key on load
   useEffect(() => {
@@ -218,6 +219,60 @@ function VerifyContent() {
     }
   };
 
+  const verifyLatestReceipt = async () => {
+    setIsVerifyingLatest(true);
+    setErrorMessage(null);
+    setResult(null);
+
+    try {
+      const res = await fetch('/api/receipts');
+      if (!res.ok) {
+        throw new Error('Failed to fetch receipts from server');
+      }
+      const data = await res.json();
+      if (!data.receipts || data.receipts.length === 0) {
+        throw new Error(
+          'No receipts found in store yet. Run a scenario or payment on the Home page first to generate a receipt.'
+        );
+      }
+
+      // Sort by issuedAt descending to get the newest receipt
+      const latest = [...data.receipts].sort(
+        (a: any, b: any) => (b.issuedAt || 0) - (a.issuedAt || 0)
+      )[0];
+
+      setJsonInput(JSON.stringify(latest, null, 2));
+      setActiveTab('json');
+
+      setIsLoading(true);
+      const verifyRes = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt: latest }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.message || verifyData.error || 'Verification request failed');
+      }
+
+      setResult({
+        type: 'RECEIPT',
+        isValid: verifyData.verification?.isValid || false,
+        error: verifyData.verification?.error,
+        receipt: verifyData.receipt,
+        signerStatus: verifyData.verification?.signerStatus,
+        configuredAuthorityPubkey: verifyData.verification?.configuredAuthorityPubkey,
+        badges: verifyData.verification?.badges,
+        onChain: verifyData.verification?.onChain,
+      });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error verifying latest receipt');
+    } finally {
+      setIsVerifyingLatest(false);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Header */}
@@ -294,6 +349,15 @@ function VerifyContent() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
+                  variant="primary"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                  onClick={verifyLatestReceipt}
+                  isLoading={isVerifyingLatest}
+                >
+                  ✨ Verify my latest receipt
+                </Button>
+                <Button
+                  size="sm"
                   variant="outline"
                   onClick={() => {
                     setTxInput(SAMPLE_TX_ANCHORED);
@@ -333,13 +397,22 @@ function VerifyContent() {
               />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                  onClick={verifyLatestReceipt}
+                  isLoading={isVerifyingLatest}
+                >
+                  ✨ Verify my latest receipt
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_GENUINE, null, 2))}
                 >
-                  Load Genuine Receipt
+                  Load Sample Receipt
                 </Button>
                 <Button
                   size="sm"
@@ -347,7 +420,7 @@ function VerifyContent() {
                   className="text-rose-400 hover:text-rose-300"
                   onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_TAMPERED, null, 2))}
                 >
-                  Load Tampered Example (Expected to Fail)
+                  TAMPERED EXAMPLE – expected to fail
                 </Button>
               </div>
               <Button
@@ -359,6 +432,9 @@ function VerifyContent() {
                 Verify Receipt
               </Button>
             </div>
+            <p className="text-[11px] font-mono text-slate-400 bg-slate-900/40 p-2.5 rounded border border-slate-800">
+              <strong className="text-amber-400/90">Note for Sample Receipt:</strong> Signed by a sample key, so the signer will show as UNKNOWN. Use &quot;Verify my latest receipt&quot; for this deployment&apos;s receipts.
+            </p>
           </div>
         )}
       </Card>

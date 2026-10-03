@@ -5,7 +5,7 @@ import {
   MIN_RESERVE_SOL,
   LAMPORTS_PER_SOL,
 } from './transfer-devnet-sol';
-import { generateEd25519Keypair } from '@credaver/core';
+import { generateEd25519Keypair } from '../packages/core/src/index.js';
 
 describe('scripts/transfer-devnet-sol: Argument and Safety Rule Validation', () => {
   const sender = generateEd25519Keypair();
