@@ -5,7 +5,7 @@ import {
   SignedReceiptSchema,
   DEFAULT_DEVNET_RPC,
 } from '@credaver/core';
-import { getServerStore } from '../../../lib/server-state';
+import { getServerStore, getServerReceiptAuthorityKeypair } from '../../../lib/server-state';
 import { z } from 'zod';
 
 const VerifyQuerySchema = z.object({
@@ -71,7 +71,11 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      const verification = await verifyCompleteReceipt(receipt, { rpcUrl });
+      const authorityKeypair = getServerReceiptAuthorityKeypair();
+      const verification = await verifyCompleteReceipt(receipt, {
+        rpcUrl,
+        configuredAuthorityPubkey: authorityKeypair.publicKey,
+      });
       return NextResponse.json({
         type: 'RECEIPT',
         receipt,
@@ -122,7 +126,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const verification = await verifyCompleteReceipt(parsedReceipt.data, { rpcUrl });
+      const authorityKeypair = getServerReceiptAuthorityKeypair();
+      const verification = await verifyCompleteReceipt(parsedReceipt.data, {
+        rpcUrl,
+        configuredAuthorityPubkey: authorityKeypair.publicKey,
+      });
       return NextResponse.json({
         type: 'RECEIPT',
         receipt: parsedReceipt.data,
@@ -163,7 +171,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const verification = await verifyCompleteReceipt(receipt, { rpcUrl });
+      const authorityKeypair = getServerReceiptAuthorityKeypair();
+      const verification = await verifyCompleteReceipt(receipt, {
+        rpcUrl,
+        configuredAuthorityPubkey: authorityKeypair.publicKey,
+      });
       return NextResponse.json({
         type: 'RECEIPT',
         receipt,

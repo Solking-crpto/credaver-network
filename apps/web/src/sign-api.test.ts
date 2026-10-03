@@ -8,7 +8,13 @@ import {
   ReasonCode,
   verifyEd25519,
 } from '@credaver/core';
-import { getServerStore, getServerPaymentKey } from './lib/server-state.js';
+import {
+  getServerStore,
+  getServerPaymentKey,
+  getServerPayerKeypair,
+  getServerReceiptAuthorityKeypair,
+  getServerAnchorKeypair,
+} from './lib/server-state.js';
 
 describe('apps/web: POST /api/sign Constrained Signing Route', () => {
   let operator: ReturnType<typeof generateEd25519Keypair>;
@@ -199,7 +205,7 @@ describe('apps/web: POST /api/sign Constrained Signing Route', () => {
     expect(data.signature).toBeUndefined();
   });
 
-  it('4. Enforces production fail-loud when Upstash credentials are missing in NODE_ENV=production', () => {
+  it('4. Enforces production fail-loud when Upstash/KV credentials are missing in NODE_ENV=production', () => {
     const originalEnv = process.env.NODE_ENV;
     const originalStore = globalThis.__credaverStore;
     try {
@@ -207,8 +213,10 @@ describe('apps/web: POST /api/sign Constrained Signing Route', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.UPSTASH_REDIS_REST_URL;
       delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      delete process.env.KV_REST_API_URL;
+      delete process.env.KV_REST_API_TOKEN;
 
-      expect(() => getServerStore()).toThrowError(/Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN in production/);
+      expect(() => getServerStore()).toThrowError(/Missing UPSTASH_REDIS_REST_URL/);
     } finally {
       (process.env as any).NODE_ENV = originalEnv;
       globalThis.__credaverStore = originalStore;
@@ -239,5 +247,74 @@ describe('apps/web: POST /api/sign Constrained Signing Route', () => {
     const data = await rateLimitedResponse!.json();
     expect(data.error).toBe('RATE_LIMIT_EXCEEDED');
     expect(rateLimitedResponse!.headers.get('Retry-After')).toBeDefined();
+  });
+
+  it('6. Accepts KV_REST_API_URL and KV_REST_API_TOKEN as aliases for Upstash Redis', () => {
+    const originalStore = globalThis.__credaverStore;
+    const origUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const origTok = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const origKvUrl = process.env.KV_REST_API_URL;
+    const origKvTok = process.env.KV_REST_API_TOKEN;
+
+    try {
+      globalThis.__credaverStore = undefined;
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      process.env.KV_REST_API_URL = 'https://fake-kv.upstash.io';
+      process.env.KV_REST_API_TOKEN = 'fake-token-123';
+
+      const store = getServerStore();
+      expect(store).toBeDefined();
+    } finally {
+      process.env.UPSTASH_REDIS_REST_URL = origUrl;
+      process.env.UPSTASH_REDIS_REST_TOKEN = origTok;
+      process.env.KV_REST_API_URL = origKvUrl;
+      process.env.KV_REST_API_TOKEN = origKvTok;
+      globalThis.__credaverStore = originalStore;
+    }
+  });
+
+  it('7. Enforces production key requirements in NODE_ENV=production', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const origPayment = process.env.DEVNET_PAYMENT_SECRET_KEY;
+    const origAuthority = process.env.CREDAVER_AUTHORITY_SECRET_KEY;
+    const origReceiptAuth = process.env.RECEIPT_AUTHORITY_SECRET_KEY;
+    const origAnchor = process.env.ANCHOR_SECRET_KEY;
+    const origAnchorPayer = process.env.ANCHOR_PAYER_SECRET_KEY;
+    const origAnchorOnChain = process.env.ANCHOR_ON_CHAIN;
+
+    try {
+      (process.env as any).NODE_ENV = 'production';
+
+      // 1. DEVNET_PAYMENT_SECRET_KEY missing
+      delete process.env.DEVNET_PAYMENT_SECRET_KEY;
+      expect(() => getServerPaymentKey()).toThrowError(/Missing DEVNET_PAYMENT_SECRET_KEY in production/);
+      expect(() => getServerPayerKeypair()).toThrowError(/Missing DEVNET_PAYMENT_SECRET_KEY in production/);
+
+      // Provide payment key, test CREDAVER_AUTHORITY_SECRET_KEY
+      process.env.DEVNET_PAYMENT_SECRET_KEY = '5'.repeat(64);
+      delete process.env.CREDAVER_AUTHORITY_SECRET_KEY;
+      delete process.env.RECEIPT_AUTHORITY_SECRET_KEY;
+      expect(() => getServerReceiptAuthorityKeypair()).toThrowError(
+        /Missing CREDAVER_AUTHORITY_SECRET_KEY in production/
+      );
+
+      // Provide authority key, test ANCHOR_SECRET_KEY when ANCHOR_ON_CHAIN=true
+      process.env.CREDAVER_AUTHORITY_SECRET_KEY = '6'.repeat(64);
+      process.env.ANCHOR_ON_CHAIN = 'true';
+      delete process.env.ANCHOR_SECRET_KEY;
+      delete process.env.ANCHOR_PAYER_SECRET_KEY;
+      expect(() => getServerAnchorKeypair()).toThrowError(
+        /Missing ANCHOR_SECRET_KEY in production when ANCHOR_ON_CHAIN=true/
+      );
+    } finally {
+      (process.env as any).NODE_ENV = originalEnv;
+      process.env.DEVNET_PAYMENT_SECRET_KEY = origPayment;
+      process.env.CREDAVER_AUTHORITY_SECRET_KEY = origAuthority;
+      process.env.RECEIPT_AUTHORITY_SECRET_KEY = origReceiptAuth;
+      process.env.ANCHOR_SECRET_KEY = origAnchor;
+      process.env.ANCHOR_PAYER_SECRET_KEY = origAnchorPayer;
+      process.env.ANCHOR_ON_CHAIN = origAnchorOnChain;
+    }
   });
 });

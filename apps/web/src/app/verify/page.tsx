@@ -9,6 +9,7 @@ import { Badge } from '../../components/ui/Badge';
 interface VerificationBadges {
   hashMatches: boolean;
   authorityValid: boolean;
+  isConfiguredAuthority?: boolean;
   onChainAnchored: boolean | null;
   onChainVerified: boolean | null;
 }
@@ -18,6 +19,8 @@ interface VerificationResult {
   isValid: boolean;
   error?: string;
   receipt?: any;
+  signerStatus?: 'SIGNED BY CREDAVER AUTHORITY' | 'UNKNOWN SIGNER';
+  configuredAuthorityPubkey?: string;
   badges?: VerificationBadges;
   onChain?: {
     isValid: boolean;
@@ -67,6 +70,19 @@ function VerifyContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [configuredAuthority, setConfiguredAuthority] = useState<string | null>(null);
+
+  // Fetch configured authority key on load
+  useEffect(() => {
+    fetch('/api/authority')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authorityPubkey) {
+          setConfiguredAuthority(data.authorityPubkey);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Auto-fill from query params (?tx=... or ?receiptId=...)
   useEffect(() => {
@@ -126,7 +142,10 @@ function VerifyContent() {
       setResult({
         type: 'RECEIPT',
         isValid: data.verification?.isValid || false,
+        error: data.verification?.error,
         receipt: data.receipt,
+        signerStatus: data.verification?.signerStatus,
+        configuredAuthorityPubkey: data.verification?.configuredAuthorityPubkey,
         badges: data.verification?.badges,
         onChain: data.verification?.onChain,
       });
@@ -164,7 +183,10 @@ function VerifyContent() {
       setResult({
         type: 'RECEIPT',
         isValid: data.verification?.isValid || false,
+        error: data.verification?.error,
         receipt: data.receipt,
+        signerStatus: data.verification?.signerStatus,
+        configuredAuthorityPubkey: data.verification?.configuredAuthorityPubkey,
         badges: data.verification?.badges,
         onChain: data.verification?.onChain,
       });
@@ -332,10 +354,25 @@ function VerifyContent() {
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant={result.isValid ? 'green' : 'rose'}>
                     {result.isValid ? 'VERIFIED AUTHENTIC' : 'VERIFICATION FAILED'}
                   </Badge>
+                  {result.type === 'RECEIPT' && (
+                    <Badge
+                      variant={
+                        result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                        result.badges?.isConfiguredAuthority !== false
+                          ? 'green'
+                          : 'rose'
+                      }
+                    >
+                      {result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                      result.badges?.isConfiguredAuthority !== false
+                        ? 'SIGNED BY CREDAVER AUTHORITY'
+                        : 'UNKNOWN SIGNER'}
+                    </Badge>
+                  )}
                   <span className="text-xs text-slate-400 font-mono">
                     Mode: {result.type}
                   </span>
@@ -343,7 +380,7 @@ function VerifyContent() {
                 <h2 className="text-xl font-bold text-white mt-1">
                   {result.isValid
                     ? 'Cryptographic & On-Chain Integrity Confirmed'
-                    : 'Discrepancy Detected During Verification'}
+                    : result.error || 'Discrepancy Detected During Verification'}
                 </h2>
               </div>
 
@@ -380,12 +417,22 @@ function VerifyContent() {
                 <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
                   2. Authority Signature
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 font-medium text-xs">
-                  {result.badges?.authorityValid !== false ? (
-                    <span className="text-emerald-400">✓ Valid Ed25519</span>
-                  ) : (
-                    <span className="text-rose-400">✗ Invalid Signature</span>
-                  )}
+                <div className="mt-1 flex flex-col gap-0.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    {result.badges?.authorityValid !== false ? (
+                      <span className="text-emerald-400">✓ Valid Ed25519</span>
+                    ) : (
+                      <span className="text-rose-400">✗ Invalid Signature</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] font-mono">
+                    {result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                    result.badges?.isConfiguredAuthority !== false ? (
+                      <span className="text-emerald-400 font-semibold">● CREDAVER AUTHORITY</span>
+                    ) : (
+                      <span className="text-rose-400 font-semibold">▲ UNKNOWN SIGNER</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -503,6 +550,32 @@ function VerifyContent() {
                       <span className="text-slate-400">Issued At:</span>
                       <span className="md:col-span-2 text-slate-200">
                         {new Date(r.issuedAt).toUTCString()} ({r.issuedAt})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
+                      <span className="text-slate-400">Authority Signer Pubkey:</span>
+                      <span className="md:col-span-2 text-slate-200 break-all">{r.authorityPubkey || 'N/A'}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
+                      <span className="text-slate-400">Configured Authority:</span>
+                      <span className="md:col-span-2 text-slate-200 break-all">
+                        {result.configuredAuthorityPubkey || configuredAuthority || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
+                      <span className="text-slate-400">Signer Verification:</span>
+                      <span
+                        className={`md:col-span-2 font-bold ${
+                          result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                          result.badges?.isConfiguredAuthority !== false
+                            ? 'text-emerald-400'
+                            : 'text-rose-400'
+                        }`}
+                      >
+                        {result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                        result.badges?.isConfiguredAuthority !== false
+                          ? 'SIGNED BY CREDAVER AUTHORITY'
+                          : 'UNKNOWN SIGNER'}
                       </span>
                     </div>
                   </div>

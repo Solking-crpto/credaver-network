@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as verifyGetRoute, POST as verifyPostRoute } from './app/api/verify/route';
+import { GET as authorityGetRoute } from './app/api/authority/route';
 import {
   generateEd25519Keypair,
   issueSignedReceipt,
   SignedReceipt,
   SPL_MEMO_PROGRAM_ID,
 } from '@credaver/core';
-import { getServerStore } from './lib/server-state';
+import { getServerStore, getServerReceiptAuthorityKeypair } from './lib/server-state';
 
 describe('apps/web: /api/verify Verification Endpoints', () => {
   let operator: ReturnType<typeof generateEd25519Keypair>;
@@ -19,6 +20,8 @@ describe('apps/web: /api/verify Verification Endpoints', () => {
     operator = generateEd25519Keypair();
     agent = generateEd25519Keypair();
     merchant = generateEd25519Keypair();
+
+    const authority = getServerReceiptAuthorityKeypair();
 
     receipt = issueSignedReceipt(
       {
@@ -34,9 +37,9 @@ describe('apps/web: /api/verify Verification Endpoints', () => {
         reasonCodes: ['POLICY_PASSED_ALL_GATES'],
         policyVersion: 'credav-v1.0',
         issuedAt: Date.now(),
-        authorityPubkey: operator.publicKey,
+        authorityPubkey: authority.publicKey,
       },
-      operator.secretKey,
+      authority.secretKey,
       'mockTxSignature123'
     );
 
@@ -132,5 +135,51 @@ describe('apps/web: /api/verify Verification Endpoints', () => {
     } finally {
       globalThis.fetch = origFetch;
     }
+  });
+
+  it('6. GET /api/authority returns configured CredaVer authority public key', async () => {
+    const res = await authorityGetRoute();
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.authorityPubkey).toBeDefined();
+    expect(data.status).toBe('ACTIVE');
+    expect(data.algorithm).toBe('Ed25519');
+  });
+
+  it('7. Flags receipt signed by a random key as UNKNOWN SIGNER', async () => {
+    const randomAuthority = generateEd25519Keypair();
+    const randomReceipt = issueSignedReceipt(
+      {
+        receiptId: `rcpt-test-random-${Date.now()}`,
+        mandateHash: 'b'.repeat(64),
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: 'USDC',
+        amount: '500000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: `nonce-random-${Date.now()}`,
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: randomAuthority.publicKey,
+      },
+      randomAuthority.secretKey
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/verify', {
+      method: 'POST',
+      body: JSON.stringify({ receipt: randomReceipt }),
+    });
+    const res = await verifyPostRoute(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    expect(data.verification.isValid).toBe(false);
+    expect(data.verification.signerStatus).toBe('UNKNOWN SIGNER');
+    expect(data.verification.badges.isConfiguredAuthority).toBe(false);
+    expect(data.verification.badges.authorityValid).toBe(true);
+    expect(data.verification.error).toContain('UNKNOWN SIGNER');
   });
 });

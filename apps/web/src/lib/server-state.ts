@@ -11,12 +11,16 @@ import { createPublicKey } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Global singleton across hot reloads in development
+// Global singletons across hot reloads in development
 declare global {
   // eslint-disable-next-line no-var
   var __credaverStore: ICredaverStore | undefined;
   // eslint-disable-next-line no-var
   var __credaverFallbackKey: string | undefined;
+  // eslint-disable-next-line no-var
+  var __credaverAuthorityFallbackKey: string | undefined;
+  // eslint-disable-next-line no-var
+  var __credaverAnchorFallbackKey: string | undefined;
 }
 
 export function parseOrDeriveKeypair(
@@ -49,15 +53,18 @@ export function parseOrDeriveKeypair(
 
 export function getServerStore(): ICredaverStore {
   if (!globalThis.__credaverStore) {
-    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+    if (redisUrl && redisToken) {
       globalThis.__credaverStore = new UpstashRedisStore({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+        url: redisUrl,
+        token: redisToken,
       });
     } else {
       if (process.env.NODE_ENV === 'production') {
         throw new Error(
-          '[CredaVer Configuration Error] Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN in production. Silent in-memory fallback is disabled in production to guarantee multi-instance replay safety and audit persistence.'
+          '[CredaVer Configuration Error] Missing UPSTASH_REDIS_REST_URL (or KV_REST_API_URL) / UPSTASH_REDIS_REST_TOKEN (or KV_REST_API_TOKEN) in production. Silent in-memory fallback is disabled in production to guarantee multi-instance replay safety and audit persistence.'
         );
       }
       globalThis.__credaverStore = new MemoryStore();
@@ -71,7 +78,13 @@ export function getServerPaymentKey(): string {
     return process.env.DEVNET_PAYMENT_SECRET_KEY;
   }
 
-  // Check root .devnet-payer.json if available
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CredaVer Configuration Error] Missing DEVNET_PAYMENT_SECRET_KEY in production. An explicit payment key must be provided.'
+    );
+  }
+
+  // Non-production only: check root .devnet-payer.json if available
   const possiblePaths = [
     path.resolve(process.cwd(), '.devnet-payer.json'),
     path.resolve(process.cwd(), '../../.devnet-payer.json'),
@@ -90,7 +103,7 @@ export function getServerPaymentKey(): string {
     }
   }
 
-  // Fallback to ephemeral test key
+  // Non-production only: fallback to ephemeral test key
   if (!globalThis.__credaverFallbackKey) {
     const ephemeral = generateEd25519Keypair();
     globalThis.__credaverFallbackKey = ephemeral.secretKey;
@@ -106,6 +119,13 @@ export function getServerPayerKeypair(): { publicKey: string; secretKey: string 
     );
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CredaVer Configuration Error] Missing DEVNET_PAYMENT_SECRET_KEY in production.'
+    );
+  }
+
+  // Non-production only: check .devnet-payer.json
   const possiblePaths = [
     path.resolve(process.cwd(), '.devnet-payer.json'),
     path.resolve(process.cwd(), '../../.devnet-payer.json'),
@@ -115,8 +135,8 @@ export function getServerPayerKeypair(): { publicKey: string; secretKey: string 
     if (fs.existsSync(p)) {
       try {
         const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (data.secretKey && data.publicKey) {
-          return { publicKey: data.publicKey, secretKey: data.secretKey };
+        if (data.secretKey) {
+          return parseOrDeriveKeypair(data.secretKey, data.publicKey);
         }
       } catch {
         // Continue
@@ -125,28 +145,53 @@ export function getServerPayerKeypair(): { publicKey: string; secretKey: string 
   }
 
   const secretKey = getServerPaymentKey();
-  return parseOrDeriveKeypair(
-    secretKey,
-    process.env.DEVNET_PAYMENT_PUBLIC_KEY || 'HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS'
-  );
+  return parseOrDeriveKeypair(secretKey, process.env.DEVNET_PAYMENT_PUBLIC_KEY);
 }
 
 export function getServerReceiptAuthorityKeypair(): { publicKey: string; secretKey: string } {
-  if (process.env.RECEIPT_AUTHORITY_SECRET_KEY) {
-    return parseOrDeriveKeypair(
-      process.env.RECEIPT_AUTHORITY_SECRET_KEY,
-      process.env.RECEIPT_AUTHORITY_PUBLIC_KEY
+  const authSecret =
+    process.env.CREDAVER_AUTHORITY_SECRET_KEY || process.env.RECEIPT_AUTHORITY_SECRET_KEY;
+  const authPub =
+    process.env.CREDAVER_AUTHORITY_PUBLIC_KEY || process.env.RECEIPT_AUTHORITY_PUBLIC_KEY;
+
+  if (authSecret) {
+    return parseOrDeriveKeypair(authSecret, authPub);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CredaVer Configuration Error] Missing CREDAVER_AUTHORITY_SECRET_KEY in production. An explicit receipt signing authority key is required.'
     );
   }
-  return getServerPayerKeypair();
+
+  // Non-production only: dedicated ephemeral authority key (NEVER reuse payment key)
+  if (!globalThis.__credaverAuthorityFallbackKey) {
+    const ephemeral = generateEd25519Keypair();
+    globalThis.__credaverAuthorityFallbackKey = ephemeral.secretKey;
+  }
+  return parseOrDeriveKeypair(globalThis.__credaverAuthorityFallbackKey, authPub);
 }
 
 export function getServerAnchorKeypair(): { publicKey: string; secretKey: string } {
-  if (process.env.ANCHOR_PAYER_SECRET_KEY) {
-    return parseOrDeriveKeypair(
-      process.env.ANCHOR_PAYER_SECRET_KEY,
-      process.env.ANCHOR_PAYER_PUBLIC_KEY
+  const anchorSecret =
+    process.env.ANCHOR_SECRET_KEY || process.env.ANCHOR_PAYER_SECRET_KEY;
+  const anchorPub =
+    process.env.ANCHOR_PUBLIC_KEY || process.env.ANCHOR_PAYER_PUBLIC_KEY;
+
+  if (anchorSecret) {
+    return parseOrDeriveKeypair(anchorSecret, anchorPub);
+  }
+
+  if (process.env.ANCHOR_ON_CHAIN === 'true' && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CredaVer Configuration Error] Missing ANCHOR_SECRET_KEY in production when ANCHOR_ON_CHAIN=true.'
     );
   }
-  return getServerPayerKeypair();
+
+  // Non-production only: dedicated ephemeral anchor key
+  if (!globalThis.__credaverAnchorFallbackKey) {
+    const ephemeral = generateEd25519Keypair();
+    globalThis.__credaverAnchorFallbackKey = ephemeral.secretKey;
+  }
+  return parseOrDeriveKeypair(globalThis.__credaverAnchorFallbackKey, anchorPub);
 }

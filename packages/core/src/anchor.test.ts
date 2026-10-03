@@ -249,5 +249,71 @@ describe('Milestone 4: Solana Devnet Memo Anchoring & Verification', () => {
       expect(verification.isValid).toBe(false);
       expect(verification.badges.authorityValid).toBe(false);
     });
+
+    it('verifies receipt matching configured CredaVer authority and sets SIGNED BY CREDAVER AUTHORITY', async () => {
+      const configuredAuthority = generateEd25519Keypair();
+      const body: ReceiptBody = {
+        receiptId: 'rcpt-test-auth-match',
+        mandateHash: sampleMandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: 'MerchantAddress111111111111111111111111111',
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: 'nonce-auth-match',
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: configuredAuthority.publicKey,
+      };
+
+      const receipt = issueSignedReceipt(body, configuredAuthority.secretKey);
+      const verification = await verifyCompleteReceipt(receipt, {
+        verifyOnChain: false,
+        configuredAuthorityPubkey: configuredAuthority.publicKey,
+      });
+
+      expect(verification.isValid).toBe(true);
+      expect(verification.signerStatus).toBe('SIGNED BY CREDAVER AUTHORITY');
+      expect(verification.badges.isConfiguredAuthority).toBe(true);
+      expect(verification.badges.authorityValid).toBe(true);
+    });
+
+    it('flags receipt signed by a random key as UNKNOWN SIGNER and rejects verification', async () => {
+      const configuredAuthority = generateEd25519Keypair();
+      const randomAuthority = generateEd25519Keypair();
+
+      const body: ReceiptBody = {
+        receiptId: 'rcpt-test-random-authority',
+        mandateHash: sampleMandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: 'MerchantAddress111111111111111111111111111',
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: 'nonce-random-auth',
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: randomAuthority.publicKey,
+      };
+
+      // Valid Ed25519 signature by randomAuthority
+      const receipt = issueSignedReceipt(body, randomAuthority.secretKey);
+
+      // Verify against configuredAuthority
+      const verification = await verifyCompleteReceipt(receipt, {
+        verifyOnChain: false,
+        configuredAuthorityPubkey: configuredAuthority.publicKey,
+      });
+
+      expect(verification.isValid).toBe(false);
+      expect(verification.signerStatus).toBe('UNKNOWN SIGNER');
+      expect(verification.badges.isConfiguredAuthority).toBe(false);
+      expect(verification.badges.authorityValid).toBe(true); // Signature valid for the random key, but not the authority!
+      expect(verification.error).toContain('UNKNOWN SIGNER');
+    });
   });
 });

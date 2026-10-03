@@ -308,9 +308,13 @@ export interface CompleteReceiptVerificationResult {
   isValid: boolean;
   error?: string;
   receiptHash: string;
+  authorityPubkey?: string;
+  configuredAuthorityPubkey?: string;
+  signerStatus: 'SIGNED BY CREDAVER AUTHORITY' | 'UNKNOWN SIGNER';
   badges: {
     hashMatches: boolean;
     authorityValid: boolean;
+    isConfiguredAuthority: boolean;
     onChainAnchored: boolean | null;
     onChainVerified: boolean | null;
   };
@@ -327,11 +331,16 @@ export interface CompleteReceiptVerificationResult {
  * End-to-end full receipt verifier:
  * 1. Checks schema and canonical hash
  * 2. Checks authority Ed25519 signature
- * 3. Checks Solana devnet memo anchoring (if onChainTxSignature is present)
+ * 3. Compares receipt.authorityPubkey to configured CredaVer authority
+ * 4. Checks Solana devnet memo anchoring (if onChainTxSignature is present)
  */
 export async function verifyCompleteReceipt(
   receipt: SignedReceipt,
-  options?: { rpcUrl?: string; verifyOnChain?: boolean }
+  options?: {
+    rpcUrl?: string;
+    verifyOnChain?: boolean;
+    configuredAuthorityPubkey?: string;
+  }
 ): Promise<CompleteReceiptVerificationResult> {
   const bodyOnly: ReceiptBody = {
     receiptId: receipt.receiptId,
@@ -357,6 +366,31 @@ export async function verifyCompleteReceipt(
   const canonicalBytes = Buffer.from(canonicalizeJson(bodyOnly), 'utf8');
   const authorityValid = verifyEd25519(canonicalBytes, receipt.authoritySignature, receipt.authorityPubkey);
 
+  // Compare against configured CredaVer authority key
+  const configuredAuthorityPubkey =
+    options?.configuredAuthorityPubkey ??
+    (typeof process !== 'undefined'
+      ? process.env.CREDAVER_AUTHORITY_PUBLIC_KEY ||
+        process.env.RECEIPT_AUTHORITY_PUBLIC_KEY
+      : undefined);
+
+  let isConfiguredAuthority = true;
+  let signerStatus: 'SIGNED BY CREDAVER AUTHORITY' | 'UNKNOWN SIGNER' = 'SIGNED BY CREDAVER AUTHORITY';
+  let authorityMismatchError: string | undefined = undefined;
+
+  if (configuredAuthorityPubkey) {
+    if (receipt.authorityPubkey !== configuredAuthorityPubkey) {
+      isConfiguredAuthority = false;
+      signerStatus = 'UNKNOWN SIGNER';
+      authorityMismatchError = `Receipt signed by unknown authority (${receipt.authorityPubkey}); expected configured CredaVer authority (${configuredAuthorityPubkey}): UNKNOWN SIGNER`;
+    }
+  } else {
+    if (!receipt.authorityPubkey || !authorityValid) {
+      isConfiguredAuthority = false;
+      signerStatus = 'UNKNOWN SIGNER';
+    }
+  }
+
   const hasOnChainSig = Boolean(receipt.onChainTxSignature);
   let onChainVerified: boolean | null = null;
   let onChainDetails: CompleteReceiptVerificationResult['onChain'];
@@ -374,14 +408,33 @@ export async function verifyCompleteReceipt(
     };
   }
 
-  const isValid = hashMatches && authorityValid && (hasOnChainSig ? onChainVerified === true : true);
+  const error = !hashMatches
+    ? `Receipt hash mismatch: expected ${expectedHash}, got ${receipt.receiptHash}`
+    : !authorityValid
+    ? 'Invalid authority signature on receipt'
+    : authorityMismatchError
+    ? authorityMismatchError
+    : hasOnChainSig && onChainVerified === false
+    ? 'On-chain SPL Memo verification failed'
+    : undefined;
+
+  const isValid =
+    hashMatches &&
+    authorityValid &&
+    isConfiguredAuthority &&
+    (hasOnChainSig ? onChainVerified === true : true);
 
   return {
     isValid,
+    error,
     receiptHash: receipt.receiptHash,
+    authorityPubkey: receipt.authorityPubkey,
+    configuredAuthorityPubkey,
+    signerStatus,
     badges: {
       hashMatches,
       authorityValid,
+      isConfiguredAuthority,
       onChainAnchored: hasOnChainSig,
       onChainVerified,
     },

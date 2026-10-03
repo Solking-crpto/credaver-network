@@ -7,7 +7,12 @@ import {
   ReasonCode,
   SignedReceipt,
 } from '@credaver/core';
-import { getServerStore, getServerPayerKeypair } from '../../../lib/server-state';
+import {
+  getServerStore,
+  getServerPayerKeypair,
+  getServerReceiptAuthorityKeypair,
+  getServerAnchorKeypair,
+} from '../../../lib/server-state';
 
 import { z } from 'zod';
 
@@ -42,6 +47,19 @@ export async function POST(req: NextRequest) {
     const { scenario } = parseResult.data;
     const store = getServerStore();
     const payerKeypair = getServerPayerKeypair();
+    const authorityKeypair = getServerReceiptAuthorityKeypair();
+    const anchorKeypair = getServerAnchorKeypair();
+
+    const baseSignOptions = {
+      store,
+      paymentSecretKey: payerKeypair.secretKey,
+      payerPubkey: payerKeypair.publicKey,
+      authoritySecretKey: authorityKeypair.secretKey,
+      authorityPubkey: authorityKeypair.publicKey,
+      anchorSecretKey: anchorKeypair.secretKey,
+      anchorPubkey: anchorKeypair.publicKey,
+      anchorOnChain: false,
+    };
 
     const NETWORK = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
     const USDC_ASSET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
@@ -87,13 +105,10 @@ export async function POST(req: NextRequest) {
       );
 
       const signResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
-        payerPubkey: payerKeypair.publicKey,
-        anchorOnChain: false, // Fast execution for dashboard demo
       });
 
       const latencyMs = Date.now() - startTime;
@@ -147,11 +162,10 @@ export async function POST(req: NextRequest) {
       );
 
       const signResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -209,11 +223,10 @@ export async function POST(req: NextRequest) {
       );
 
       const signResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate: revokedMandate!,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -267,11 +280,10 @@ export async function POST(req: NextRequest) {
       );
 
       const signResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -327,20 +339,18 @@ export async function POST(req: NextRequest) {
 
       // First run succeeds
       await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       // Second identical run with the SAME nonce fails
       const replayResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       const latencyMs = Date.now() - startTime;
@@ -396,11 +406,10 @@ export async function POST(req: NextRequest) {
       );
 
       const signResult = await evaluateAndSignTransaction({
+        ...baseSignOptions,
         mandate,
         proof,
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
-        store,
-        paymentSecretKey: payerKeypair.secretKey,
       });
 
       const latencyMs = Date.now() - startTime;
