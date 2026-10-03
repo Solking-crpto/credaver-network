@@ -142,4 +142,26 @@ pnpm test packages/core/src/anchor.test.ts apps/web/src/verify-api.test.ts
   4. Real-time visual badge grid: Hash Matches, Authority Signature Valid, Devnet Memo Match, Confirmed Slot.
   5. 1-click test presets for hackathon judges to verify real on-chain transactions directly.
 
+---
+
+## Milestone 5: Interactive Dashboard Console & Scenario Runner
+
+Run the test suite:
+```bash
+pnpm test apps/web/src/scenarios-api.test.ts
+```
+
+### Dashboard Console Features
+- **URL**: `http://localhost:3000` (`apps/web/src/app/page.tsx`)
+- **6 Key Policy Scenarios Executed via Real Engine**:
+  1. `ALLOW`: Normal payment under cap -> signs transaction, records spend progress, emits receipt.
+  2. `OVER_CAP`: Requested payment exceeds total cap -> returns 403 `AMOUNT_EXCEEDS_CAP`.
+  3. `REVOKED`: Payment attempt after operator revocation -> returns 403 `REVOKED_MANDATE`.
+  4. `EXPIRED`: Payment attempt after validity window -> returns 403 `EXPIRED_MANDATE`.
+  5. `REPLAY`: Duplicate nonce transmitted twice -> atomic `SET NX EX` fails closed with 403 `REPLAY_DETECTED`.
+  6. `REVIEW`: Payment exceeding review threshold -> returns 202 `AMOUNT_EXCEEDS_REVIEW_THRESHOLD`, held in review queue with live Approve/Reject operator controls.
+- **Active Mandates View**: Connected to `GET /api/mandates`, showing spend progress bar (`spend / cap`), expiry countdown, and interactive Revoke button calling `POST /api/mandates/[id]/revoke`.
+- **Receipts Registry View**: Connected to `GET /api/receipts`, showing live decision chips, reason codes, amounts, timestamps, and 1-click links to the `/verify` verification gateway.
+
+
 
