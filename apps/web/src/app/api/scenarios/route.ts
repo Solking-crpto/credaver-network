@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { NextRequest, NextResponse } from 'next/server';
 import {
   generateEd25519Keypair,
@@ -13,7 +15,7 @@ import {
   getServerReceiptAuthorityKeypair,
   getServerAnchorKeypair,
 } from '../../../lib/server-state';
-import { checkRateLimit, getClientIp } from '../../../lib/rate-limit';
+import { checkRateLimit, checkRedisRateLimit, getClientIp } from '../../../lib/rate-limit';
 import {
   checkDevnetPayerBalance,
   checkFacilitatorHealth,
@@ -443,17 +445,37 @@ export async function POST(req: NextRequest) {
     // 7. SCENARIO: REAL_DEVNET (Live Devnet Settlement via Constrained Signer)
     if (scenario === 'REAL_DEVNET') {
       const clientIp = getClientIp(req);
-      const rl = checkRateLimit(`scenario_real:${clientIp}`, {
-        windowMs: 20000,
-        maxRequests: 2,
-      });
 
-      if (!rl.success) {
+      // Check global daily cap in Redis (40/day)
+      const today = new Date().toISOString().slice(0, 10);
+      const dailyCap = await checkRedisRateLimit(
+        `rl:real_devnet:daily:${today}`,
+        40,
+        86400,
+        'Daily limit for live devnet payments reached (40/day). Please try again tomorrow.'
+      );
+      if (!dailyCap.allowed) {
         return NextResponse.json(
           {
             error: 'RATE_LIMIT_EXCEEDED',
-            message:
-              'Real Devnet payments are rate limited to 2 requests per 20 seconds to protect testnet funds. Please wait before triggering another payment.',
+            message: dailyCap.message,
+          },
+          { status: 429 }
+        );
+      }
+
+      // Check per-IP cap in Redis (5 requests per 60 seconds)
+      const ipCap = await checkRedisRateLimit(
+        `rl:real_devnet:ip:${clientIp}`,
+        5,
+        60,
+        'Per-IP rate limit exceeded for live devnet payments (5 requests per minute). Please wait before trying again.'
+      );
+      if (!ipCap.allowed) {
+        return NextResponse.json(
+          {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: ipCap.message,
           },
           { status: 429 }
         );
@@ -506,6 +528,9 @@ export async function POST(req: NextRequest) {
         payerPubkey: paymentResult.payerPubkey,
         merchantPubkey: paymentResult.merchantPubkey,
         resourceData: paymentResult.resourceData,
+        anchorTxSignature: paymentResult.anchorTxSignature,
+        anchorExplorerUrl: paymentResult.anchorExplorerUrl,
+        anchorStatus: paymentResult.anchorStatus,
       });
     }
 

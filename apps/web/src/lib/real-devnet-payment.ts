@@ -16,6 +16,7 @@ import {
   evaluateAndSignTransaction,
   SignedReceipt,
   SignedMandate,
+  anchorReceiptOnChain,
 } from '@credaver/core';
 import {
   CredaverConstrainedSigner,
@@ -147,9 +148,14 @@ export interface RealPaymentExecutionResult {
   resourceData?: any;
   payerPubkey: string;
   merchantPubkey: string;
+  anchorTxSignature?: string;
+  anchorExplorerUrl?: string;
+  anchorStatus?: string;
 }
 
-export async function executeRealDevnetPayment(): Promise<RealPaymentExecutionResult> {
+export async function executeRealDevnetPayment(options?: {
+  anchorOnChain?: boolean;
+}): Promise<RealPaymentExecutionResult> {
   const startTime = Date.now();
   const payerKeypair = getServerPayerKeypair();
   const authorityKeypair = getServerReceiptAuthorityKeypair();
@@ -256,6 +262,35 @@ export async function executeRealDevnetPayment(): Promise<RealPaymentExecutionRe
       ? `https://explorer.solana.com/tx/${txSignature}?cluster=devnet`
       : `https://explorer.solana.com/address/${payerKeypair.publicKey}?cluster=devnet`;
 
+    // 6. Optional On-Chain Anchoring via SPL Memo on Solana Devnet
+    let anchorTxSignature: string | undefined;
+    let anchorExplorerUrl: string | undefined;
+    let anchorStatus: string | undefined;
+
+    const shouldAnchor =
+      (process.env.ANCHOR_ON_CHAIN === 'true' || options?.anchorOnChain === true) &&
+      !!(process.env.ANCHOR_SECRET_KEY || process.env.ANCHOR_PAYER_SECRET_KEY || anchorKeypair?.secretKey);
+
+    if (shouldAnchor && capturedReceipt) {
+      try {
+        const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+        const anchorResult = await anchorReceiptOnChain(
+          capturedReceipt,
+          anchorKeypair.publicKey,
+          anchorKeypair.secretKey,
+          rpcUrl
+        );
+        anchorTxSignature = anchorResult.txSignature;
+        anchorExplorerUrl = `https://explorer.solana.com/tx/${anchorResult.txSignature}?cluster=devnet`;
+        anchorStatus = 'anchored';
+        capturedReceipt.onChainTxSignature = anchorResult.txSignature;
+        await store.saveReceipt(capturedReceipt);
+      } catch (anchorErr: any) {
+        console.warn('[CredaVer] Devnet receipt anchoring failed:', anchorErr.message);
+        anchorStatus = `anchor failed: ${anchorErr.message}`;
+      }
+    }
+
     return {
       success: !!txSignature,
       txSignature,
@@ -266,6 +301,9 @@ export async function executeRealDevnetPayment(): Promise<RealPaymentExecutionRe
       resourceData: responseBody,
       payerPubkey: payerKeypair.publicKey,
       merchantPubkey: merchantWallet,
+      anchorTxSignature,
+      anchorExplorerUrl,
+      anchorStatus,
     };
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

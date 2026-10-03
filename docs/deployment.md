@@ -7,26 +7,35 @@ This document details the configuration, required environment variables, and pre
 
 ---
 
-## 1. Required Environment Variables
+## 1. Production Environment Variables: Secret vs Config
 
 When running in `NODE_ENV=production`, the application strictly enforces the presence of multi-instance persistence credentials and signing keys. Silent fallback to in-memory storage or ephemeral keys is disabled.
 
-| Variable Name | Required | Encoding / Format | Purpose |
+Variables are strictly categorized into **Secrets** (confidential private keys and auth tokens that must NEVER be committed or leaked) and **Config** (non-sensitive URLs, flags, and public addresses).
+
+### A. Secrets (Confidential — Store in Secure Cloud Env Only)
+
+| Variable Name | Required | Encoding / Format | Purpose & Description |
 |---|---|---|---|
-| `NODE_ENV` | Yes | String (`production`) | Enables production optimizations and disables silent in-memory/ephemeral fallback. |
-| `UPSTASH_REDIS_REST_URL`<br>*(alias: `KV_REST_API_URL`)* | **Yes (in prod)** | URL string | Upstash Redis REST endpoint (or Vercel KV REST URL) for atomic `SET NX EX` replay protection and persistence. |
-| `UPSTASH_REDIS_REST_TOKEN`<br>*(alias: `KV_REST_API_TOKEN`)* | **Yes (in prod)** | Token string | Upstash Redis REST bearer token (or Vercel KV REST Token). |
-| `DEVNET_PAYMENT_SECRET_KEY` | **Yes (in prod)** | Base58 string or JSON array | Solana funding wallet private key held in custody by the CredaVer signer for settling agent transactions. |
-| `DEVNET_PAYMENT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Public address of the funding wallet (auto-derived from secret if omitted). |
-| `CREDAVER_AUTHORITY_SECRET_KEY`<br>*(alias: `RECEIPT_AUTHORITY_SECRET_KEY`)* | **Yes (in prod)** | Base58 string or JSON array | Dedicated Ed25519 private key used to sign canonical RFC 8785 receipts. Never reuses the payment key. |
-| `CREDAVER_AUTHORITY_PUBLIC_KEY`<br>*(alias: `RECEIPT_AUTHORITY_PUBLIC_KEY`)* | Optional | Base58 string (Solana address) | Public key of the receipt signing authority (auto-derived from secret if omitted). |
-| `ANCHOR_SECRET_KEY`<br>*(alias: `ANCHOR_PAYER_SECRET_KEY`)* | **Yes (if `ANCHOR_ON_CHAIN=true` in prod)** | Base58 string or JSON array | Solana devnet payer key used to broadcast SPL Memo anchor transactions. |
-| `ANCHOR_PUBLIC_KEY`<br>*(alias: `ANCHOR_PAYER_PUBLIC_KEY`)* | Optional | Base58 string (Solana address) | Public address of the anchor fee payer (auto-derived from secret if omitted). |
-| `DEVNET_MERCHANT_SECRET_KEY` | Optional | Base58 string or JSON array | Demo merchant private key used for x402 resource server settlement. |
-| `DEVNET_MERCHANT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | Demo merchant destination address for x402 payments. |
-| `SOLANA_RPC_URL` | Optional | URL string | Solana JSON-RPC endpoint for on-chain memo extraction and slot verification (defaults to public devnet RPC). |
-| `OFFICIAL_FACILITATOR_URL` | Optional | URL string | x402 public facilitator endpoint for Solana settlement (`https://x402.org/facilitator`). |
-| `ANCHOR_ON_CHAIN` | Optional | Boolean string (`true`/`false`) | When `true`, automatically broadcasts SPL Memo transactions to Solana devnet on every `ALLOW` decision. |
+| `DEVNET_PAYMENT_SECRET_KEY` | **Yes (in prod)** | Base58 string or JSON array | **Secret**: Solana funding wallet private key held in custody by the CredaVer constrained signer for settling agent transactions. |
+| `CREDAVER_AUTHORITY_SECRET_KEY`<br>*(alias: `RECEIPT_AUTHORITY_SECRET_KEY`)* | **Yes (in prod)** | Base58 string or JSON array | **Secret**: Dedicated Ed25519 private key used to sign canonical RFC 8785 receipts. Cryptographically separated from the payment key; never reused for transactions. |
+| `ANCHOR_SECRET_KEY`<br>*(alias: `ANCHOR_PAYER_SECRET_KEY`)* | **Yes (if `ANCHOR_ON_CHAIN=true` in prod)** | Base58 string or JSON array | **Secret**: Solana devnet payer key used to broadcast SPL Memo anchor transactions. |
+| `UPSTASH_REDIS_REST_TOKEN`<br>*(alias: `KV_REST_API_TOKEN`)* | **Yes (in prod)** | Bearer token string | **Secret**: Upstash Redis REST bearer token (or Vercel KV REST Token) for authenticating atomic `SET NX EX` replay checks and state persistence. |
+| `DEVNET_MERCHANT_SECRET_KEY` | Optional | Base58 string or JSON array | **Secret**: Demo merchant private key used for local x402 resource server settlement. |
+
+### B. Config (Non-Sensitive — Safe for Standard App Config)
+
+| Variable Name | Required | Type / Format | Purpose & Description |
+|---|---|---|---|
+| `NODE_ENV` | Yes | String (`production`) | **Config**: Enables production optimizations and disables silent in-memory/ephemeral fallbacks. |
+| `ANCHOR_ON_CHAIN` | Optional | Boolean string (`true`/`false`) | **Config**: When `true`, automatically broadcasts SPL Memo transactions to Solana devnet on every `ALLOW` decision. |
+| `UPSTASH_REDIS_REST_URL`<br>*(alias: `KV_REST_API_URL`)* | **Yes (in prod)** | URL string | **Config**: Upstash Redis REST endpoint (or Vercel KV REST URL) for state storage. |
+| `DEVNET_PAYMENT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | **Config**: Public address of the funding wallet (auto-derived from `DEVNET_PAYMENT_SECRET_KEY` if omitted). |
+| `CREDAVER_AUTHORITY_PUBLIC_KEY`<br>*(alias: `RECEIPT_AUTHORITY_PUBLIC_KEY`)* | Optional | Base58 string (Solana address) | **Config**: Public address of the receipt signing authority (auto-derived from `CREDAVER_AUTHORITY_SECRET_KEY` if omitted). |
+| `ANCHOR_PUBLIC_KEY`<br>*(alias: `ANCHOR_PAYER_PUBLIC_KEY`)* | Optional | Base58 string (Solana address) | **Config**: Public address of the anchor fee payer (auto-derived from `ANCHOR_SECRET_KEY` if omitted). |
+| `DEVNET_MERCHANT_PUBLIC_KEY` | Optional | Base58 string (Solana address) | **Config**: Demo merchant destination address for x402 payments. |
+| `SOLANA_RPC_URL` | Optional | URL string | **Config**: Solana JSON-RPC endpoint for on-chain memo extraction and slot verification (defaults to `https://api.devnet.solana.com`). |
+| `OFFICIAL_FACILITATOR_URL` | Optional | URL string | **Config**: x402 public facilitator endpoint for Solana settlement (`https://x402.org/facilitator`). |
 
 ---
 

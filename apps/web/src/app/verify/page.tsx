@@ -43,23 +43,44 @@ interface VerificationResult {
 const SAMPLE_TX_ANCHORED = '3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ';
 const SAMPLE_TX_SETTLEMENT = '3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg';
 
-const SAMPLE_RECEIPT = {
-  receiptId: 'rcpt-sample-verify-001',
+// Authentically produced receipt via @credaver/core issueSignedReceipt
+const SAMPLE_RECEIPT_GENUINE = {
+  receiptId: 'rcpt-sample-verify-genuine-001',
   mandateHash: '8fa3b0196238b64e5c83bc1a28a38c290135bd029e01823901b8e018a1738c81',
-  agentPubkey: 'HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS',
-  merchantPubkey: '8ijvv56h19uPLQfRRNV3HE6hAY4dmjTKPvJTiravSofM',
+  agentPubkey: '71jRSwn8epwtNvWQDJozMx9GhmChPg6HcLVqbJdBicx8',
+  merchantPubkey: '4jFXp3jkfpTcnhczVWH9mR4pgzZbXXuW72W3QEvAoMZ1',
   asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   amount: '1000000',
   network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
-  nonce: 'nonce-sample-live-verify',
+  nonce: 'nonce-sample-live-verify-001',
   decision: 'ALLOW',
   reasonCodes: ['POLICY_PASSED_ALL_GATES'],
   policyVersion: 'credav-v1.0',
   issuedAt: 1727950000000,
-  authorityPubkey: 'HnXPP38ctGbDqkfFrsr2B7y9DYLKmVZBiXLaiKMJomSS',
-  receiptHash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  authoritySignature: '3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ1111111111111111',
-  onChainTxSignature: SAMPLE_TX_ANCHORED,
+  authorityPubkey: 'BqNWfW4vgNVs1oJgDRk5MC5jqoZBNobR8cyhWfBv94HB',
+  receiptHash: '1508a727b36ff0c563d79f1cec870afc1710ac56b8d3e3e307ac03dcd7360536',
+  authoritySignature: '3GAEieNRD64RRBanPCqbbBZW6Fa3VjvBvAuVW1hir5RDzQXZU29ZxgQxGvg1Qfsog518e3tgV9Lrx7QFo83SsjWp',
+  onChainTxSignature: null,
+};
+
+// TAMPERED EXAMPLE – expected to fail (amount tampered from 1 USDC to 999.999 USDC without valid signature)
+const SAMPLE_RECEIPT_TAMPERED = {
+  receiptId: 'rcpt-sample-tampered-demo-002',
+  mandateHash: '8fa3b0196238b64e5c83bc1a28a38c290135bd029e01823901b8e018a1738c81',
+  agentPubkey: '71jRSwn8epwtNvWQDJozMx9GhmChPg6HcLVqbJdBicx8',
+  merchantPubkey: '4jFXp3jkfpTcnhczVWH9mR4pgzZbXXuW72W3QEvAoMZ1',
+  asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+  amount: '999999999', // TAMPERED: Modified amount without re-signing
+  network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+  nonce: 'nonce-sample-live-verify-001',
+  decision: 'ALLOW',
+  reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+  policyVersion: 'credav-v1.0',
+  issuedAt: 1727950000000,
+  authorityPubkey: 'BqNWfW4vgNVs1oJgDRk5MC5jqoZBNobR8cyhWfBv94HB',
+  receiptHash: '1508a727b36ff0c563d79f1cec870afc1710ac56b8d3e3e307ac03dcd7360536',
+  authoritySignature: '3GAEieNRD64RRBanPCqbbBZW6Fa3VjvBvAuVW1hir5RDzQXZU29ZxgQxGvg1Qfsog518e3tgV9Lrx7QFo83SsjWp',
+  onChainTxSignature: null,
 };
 
 function VerifyContent() {
@@ -209,7 +230,7 @@ function VerifyContent() {
           Receipt &amp; On-Chain Anchor Verification
         </h1>
         <p className="mt-2 text-sm text-slate-400">
-          Independent, zero-trust verification of CredaVer payment receipts and SPL Memo transactions.
+          Independent cryptographic verification of CredaVer payment receipts and SPL Memo transactions.
           Inspect cryptographic hash binding, operator Ed25519 signatures, and Solana devnet immutability.
         </p>
       </div>
@@ -311,14 +332,24 @@ function VerifyContent() {
                 className="w-full bg-credav-surface border border-credav-border/80 rounded-lg p-3 text-xs font-mono text-white focus:outline-none focus:border-credav-cyan"
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT, null, 2))}
-              >
-                Load Sample Receipt JSON
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_GENUINE, null, 2))}
+                >
+                  Load Genuine Receipt
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-rose-400 hover:text-rose-300"
+                  onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_TAMPERED, null, 2))}
+                >
+                  Load Tampered Example (Expected to Fail)
+                </Button>
+              </div>
               <Button
                 onClick={executeVerifyJson}
                 isLoading={isLoading}

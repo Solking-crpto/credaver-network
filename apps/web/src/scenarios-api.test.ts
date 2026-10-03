@@ -1,10 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as scenarioPostRoute } from './app/api/scenarios/route';
 import { GET as reviewsGetRoute, POST as reviewsPostRoute } from './app/api/reviews/route';
 import { ReasonCode } from '@credaver/core';
+import { checkRedisRateLimit, resetRateLimits } from './lib/rate-limit';
 
 describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
+  beforeEach(() => {
+    resetRateLimits();
+  });
+
+  afterEach(() => {
+    resetRateLimits();
+  });
   it('1. Scenario ALLOW: returns 200, ALLOW decision, and valid receipt', async () => {
     const req = new NextRequest('http://localhost:3000/api/scenarios', {
       method: 'POST',
@@ -176,5 +184,46 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
       expect(data.message).toBeDefined();
     }
   }, 30000);
+
+  it('10. Scenario REAL_DEVNET: enforces per-IP rate limit failing closed with 429', async () => {
+    const testIp = '198.51.100.42';
+    // Consume the 5 allowed requests
+    for (let i = 0; i < 5; i++) {
+      const rlResult = await checkRedisRateLimit(`rl:real_devnet:ip:${testIp}`, 5, 60);
+      expect(rlResult.allowed).toBe(true);
+    }
+    // 6th request from this IP must hit 429
+    const req = new NextRequest('http://localhost:3000/api/scenarios', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': testIp },
+      body: JSON.stringify({ scenario: 'REAL_DEVNET' }),
+    });
+    const res = await scenarioPostRoute(req);
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.error).toBe('RATE_LIMIT_EXCEEDED');
+    expect(data.message).toContain('Per-IP rate limit exceeded');
+  });
+
+  it('11. Scenario REAL_DEVNET: enforces global daily cap returning 429', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    // Artificially saturate the daily cap of 40
+    const dailyKey = `rl:real_devnet:daily:${today}`;
+    for (let i = 0; i < 40; i++) {
+      await checkRedisRateLimit(dailyKey, 40, 86400);
+    }
+    // Next request from any IP must hit 429 due to daily cap
+    const req = new NextRequest('http://localhost:3000/api/scenarios', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.1' },
+      body: JSON.stringify({ scenario: 'REAL_DEVNET' }),
+    });
+    const res = await scenarioPostRoute(req);
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.error).toBe('RATE_LIMIT_EXCEEDED');
+    expect(data.message).toContain('Daily limit for live devnet payments reached');
+  });
 });
+
 
