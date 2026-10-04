@@ -25,6 +25,10 @@ export const HeroSection: React.FC = () => {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-xl">
+            AI agents that pay need spending limits and proof of every decision. Today you give them a wallet and hope.
+          </p>
+
+          <p className="text-sm sm:text-base text-muted leading-relaxed max-w-xl">
             Scoped, expiring, revocable agent mandates with deterministic policy gates and
             cryptographically verifiable receipts for x402 payments.
           </p>
@@ -73,6 +77,7 @@ export const HeroSection: React.FC = () => {
                   <Badge variant="cyan" className="text-[10px] py-0 px-1.5 uppercase font-mono">
                     Example
                   </Badge>
+                  <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">Illustrative values</span>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -127,7 +132,7 @@ export const HeroSection: React.FC = () => {
                   <CheckCircle2 className="w-3 h-3" />
                   All 12 Gates Passed
                 </span>
-                <span className="text-slate-500">Latency: 3.4ms</span>
+                <span className="text-slate-500">Illustrative values</span>
               </div>
             </div>
           </div>

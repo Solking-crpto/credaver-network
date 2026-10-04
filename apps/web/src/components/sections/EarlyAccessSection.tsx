@@ -58,7 +58,7 @@ export const EarlyAccessSection: React.FC = () => {
             Request early access
           </h2>
           <p className="text-xs sm:text-sm text-muted max-w-md mx-auto">
-            Get notified when our hosted Policy Decision Point gateway and agent SDKs launch for production networks.
+            Leave your email and I&apos;ll tell you when a hosted version is ready.
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export const EarlyAccessSection: React.FC = () => {
             <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto" />
             <p className="text-sm font-semibold text-white">{successMessage}</p>
             <p className="text-xs text-muted">
-              We have recorded your email and will reach out when the next cohort opens.
+              We have recorded your email and will tell you when a hosted version is ready.
             </p>
           </div>
         ) : (
@@ -118,7 +118,7 @@ export const EarlyAccessSection: React.FC = () => {
             </Button>
 
             <p className="text-[11px] text-center text-slate-500 leading-normal pt-1">
-              Privacy note: We only use your email to notify you when the next cohort opens. No marketing spam, no third-party data sharing.
+              Privacy note: We only use your email to notify you when a hosted version is ready. No marketing spam, no third-party data sharing.
             </p>
           </form>
         )}

@@ -147,7 +147,7 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
         <div className="text-xs text-slate-300 space-y-1">
           <p className="font-semibold text-white">Honesty Audit</p>
           <p className="text-muted leading-relaxed">
-            Policy evaluations (all 12 gates, Ed25519 signatures, RFC 8785 canonical hashes, and operator review queues) are <strong className="text-slate-200">100% REAL</strong>. The in-browser dashboard scenarios use <strong className="text-amber-300">SIMULATED SVM bytes</strong> to ensure instant sub-10ms feedback without spending test funds. For verified live on-chain devnet settlement, execute the featured <strong className="text-emerald-400">Real Devnet Settlement</strong> below.
+            Policy evaluations (all 12 gates, Ed25519 signatures, RFC 8785 canonical hashes, and operator review queues) are <strong className="text-slate-200">100% REAL</strong>. The in-browser dashboard scenarios use <strong className="text-amber-300">SIMULATED SVM bytes</strong> to ensure instant feedback without spending test funds. For verified live on-chain devnet settlement, execute the featured <strong className="text-emerald-400">Real Devnet Settlement</strong> below.
           </p>
         </div>
       </div>

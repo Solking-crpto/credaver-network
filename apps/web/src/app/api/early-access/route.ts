@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Thank you for requesting early access. We will reach out when the next cohort opens.',
+      message: 'Thank you for requesting early access. We will notify you when a hosted version is ready.',
     });
   } catch (err: any) {
     return NextResponse.json(
