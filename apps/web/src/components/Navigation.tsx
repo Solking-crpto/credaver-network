@@ -25,26 +25,16 @@ export const Navigation: React.FC = () => {
         {/* Brand Header with slot for drop-in logo */}
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 group">
-            {/* Logo Slot: checks for /brand/credaver-mark.png, falls back to styled cybernetic wordmark */}
-            <div className="relative w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center font-black text-credav-bg text-lg shadow-glow group-hover:scale-105 transition-transform bg-gradient-to-tr from-credav-cyan via-credav-blue to-credav-violet">
-              {/* If credaver-mark.png exists, this img displays; on error it falls back to C */}
-              <img
-                src="/brand/credaver-mark.png"
-                alt="CredaVer"
-                className="w-full h-full object-cover hidden"
-                onLoad={(e) => (e.currentTarget.className = 'w-full h-full object-cover block')}
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
-              <span className="select-none">C</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-xl tracking-tight text-white group-hover:text-credav-cyan transition-colors">
-                Creda<span className="text-gradient">Ver</span>
-              </span>
-              <span className="text-[10px] text-credav-muted font-mono tracking-wider uppercase -mt-1">
-                Network
-              </span>
-            </div>
+            <img
+              src="/brand/credaver-logo-full.png"
+              alt="CredaVer Network"
+              className="h-10 w-auto object-contain hidden sm:block group-hover:opacity-90 transition-opacity"
+            />
+            <img
+              src="/brand/credaver-mark.png"
+              alt="CredaVer Network"
+              className="h-8 w-8 object-contain block sm:hidden group-hover:scale-105 transition-transform"
+            />
           </Link>
           <Badge variant="cyan" className="ml-2 hidden sm:inline-flex">
             Devnet

@@ -183,7 +183,7 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
       expect(['FACILITATOR_UNAVAILABLE', 'INSUFFICIENT_DEVNET_FUNDS']).toContain(data.error);
       expect(data.message).toBeDefined();
     }
-  }, 30000);
+  }, 60000);
 
   it('10. Scenario REAL_DEVNET: enforces per-IP rate limit failing closed with 429', async () => {
     const testIp = '198.51.100.42';

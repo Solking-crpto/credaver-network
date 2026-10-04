@@ -3,10 +3,66 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 import { Navigation } from '../components/Navigation';
 
+function getMetadataBase(): URL {
+  const envUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL;
+
+  if (envUrl) {
+    const formatted =
+      envUrl.startsWith('http://') || envUrl.startsWith('https://')
+        ? envUrl
+        : `https://${envUrl}`;
+    try {
+      return new URL(formatted);
+    } catch {
+      // fallback
+    }
+  }
+  return new URL('https://credaver.network');
+}
+
 export const metadata: Metadata = {
+  metadataBase: getMetadataBase(),
   title: 'CredaVer Network | Agent Mandates & Authorization Gateway',
   description:
     'Cryptographic authorization layer between AI agents and Solana wallets. Scoped, revocable mandates with verifiable receipts for x402 payments.',
+  icons: {
+    icon: [
+      { url: '/brand/favicon.ico' },
+      { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    shortcut: '/brand/favicon.ico',
+    apple: [
+      { url: '/brand/favicon-180.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
+  manifest: '/manifest.webmanifest',
+  openGraph: {
+    title: 'CredaVer Network | Agent Mandates & Authorization Gateway',
+    description:
+      'Cryptographic authorization layer between AI agents and Solana wallets. Scoped, revocable mandates with verifiable receipts for x402 payments.',
+    url: '/',
+    siteName: 'CredaVer Network',
+    images: [
+      {
+        url: '/brand/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'CredaVer Network',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'CredaVer Network | Agent Mandates & Authorization Gateway',
+    description:
+      'Cryptographic authorization layer between AI agents and Solana wallets. Scoped, revocable mandates with verifiable receipts for x402 payments.',
+    images: ['/brand/og-image.png'],
+  },
 };
 
 export default function RootLayout({

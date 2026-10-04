@@ -40,8 +40,7 @@ describe('apps/web: /api/verify Verification Endpoints', () => {
         issuedAt: Date.now(),
         authorityPubkey: authority.publicKey,
       },
-      authority.secretKey,
-      'mockTxSignature123'
+      authority.secretKey
     );
 
     const store = getServerStore();
