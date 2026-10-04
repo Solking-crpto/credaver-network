@@ -2,9 +2,21 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import {
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  RotateCcw,
+  AlertTriangle,
+  FileText,
+  KeyRound,
+  FileCheck,
+} from 'lucide-react';
 
 interface VerificationBadges {
   hashMatches: boolean;
@@ -40,8 +52,10 @@ interface VerificationResult {
   linkedReceipt?: any;
 }
 
-const SAMPLE_TX_ANCHORED = '3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ';
-const SAMPLE_TX_SETTLEMENT = '3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg';
+const SAMPLE_TX_ANCHORED =
+  '3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ';
+const SAMPLE_TX_SETTLEMENT =
+  '3DPyADiVncJ1Lb62PRdkytkeGp9f91re959QuYmXCTLxGk2zAw1L5FpgJkKVJHEkq9wzX6bGGTD6xm4XxWjSNeJg';
 
 // Authentically produced receipt via @credaver/core issueSignedReceipt
 const SAMPLE_RECEIPT_GENUINE = {
@@ -274,30 +288,32 @@ function VerifyContent() {
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
+    <div className="space-y-8 max-w-5xl mx-auto py-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <Badge variant="cyan">Milestone 4</Badge>
-          <span className="text-xs text-slate-500 font-mono">Solana Devnet Memo Verifier</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="cyan" className="font-mono text-xs">
+            Verification Portal
+          </Badge>
+          <span className="text-xs text-muted font-mono">Solana Devnet Memo Verifier</span>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
           Receipt &amp; On-Chain Anchor Verification
         </h1>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
           Independent cryptographic verification of CredaVer payment receipts and SPL Memo transactions.
           Inspect cryptographic hash binding, operator Ed25519 signatures, and Solana devnet immutability.
         </p>
       </div>
 
       {/* Input Selection Tabs */}
-      <Card glow>
-        <div className="flex gap-2 border-b border-credav-border/60 pb-4 mb-5">
+      <Card glow className="p-6 border-border/90 bg-surface-card/90 space-y-5">
+        <div className="flex gap-2 border-b border-border/70 pb-4">
           <button
             onClick={() => setActiveTab('tx')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors touch-target ${
               activeTab === 'tx'
-                ? 'bg-credav-cyan/20 text-credav-cyan border border-credav-cyan/40'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -305,9 +321,9 @@ function VerifyContent() {
           </button>
           <button
             onClick={() => setActiveTab('json')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors touch-target ${
               activeTab === 'json'
-                ? 'bg-credav-cyan/20 text-credav-cyan border border-credav-cyan/40'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -319,40 +335,41 @@ function VerifyContent() {
         {activeTab === 'tx' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-mono text-slate-400 mb-1">
+              <label className="block text-xs font-mono text-muted mb-1.5">
                 Enter Solana Devnet Transaction Signature
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={txInput}
                   onChange={(e) => setTxInput(e.target.value)}
                   placeholder="e.g. 3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ"
-                  className="flex-1 bg-credav-surface border border-credav-border/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-credav-cyan"
+                  className="flex-1 bg-surface border border-border/80 rounded-lg px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 min-h-[44px]"
                 />
                 <Button
                   onClick={() => executeVerifyTx(txInput)}
                   isLoading={isLoading}
                   disabled={!txInput.trim()}
                   variant="primary"
+                  className="min-h-[44px] px-5"
                 >
                   Verify On-Chain
                 </Button>
               </div>
             </div>
 
-            {/* Quick Demo Presets */}
+            {/* Presets */}
             <div className="pt-2">
-              <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider block mb-2">
-                Hackathon Judge Quick-Test Presets:
+              <span className="text-[11px] font-mono text-muted uppercase tracking-wider block mb-2">
+                Verification Presets:
               </span>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="primary"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
                   onClick={verifyLatestReceipt}
                   isLoading={isVerifyingLatest}
+                  className="min-h-[38px] px-4 font-bold"
                 >
                   ✨ Verify my latest receipt
                 </Button>
@@ -363,6 +380,7 @@ function VerifyContent() {
                     setTxInput(SAMPLE_TX_ANCHORED);
                     executeVerifyTx(SAMPLE_TX_ANCHORED);
                   }}
+                  className="min-h-[38px] px-3 font-mono text-xs"
                 >
                   ⚓ Anchored Memo Tx (Devnet)
                 </Button>
@@ -373,8 +391,9 @@ function VerifyContent() {
                     setTxInput(SAMPLE_TX_SETTLEMENT);
                     executeVerifyTx(SAMPLE_TX_SETTLEMENT);
                   }}
+                  className="min-h-[38px] px-3 font-mono text-xs"
                 >
-                  ⚡ Live S1 Settlement Tx (Devnet)
+                  ⚡ Live Settlement Tx (Devnet)
                 </Button>
               </div>
             </div>
@@ -385,7 +404,7 @@ function VerifyContent() {
         {activeTab === 'json' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-mono text-slate-400 mb-1">
+              <label className="block text-xs font-mono text-muted mb-1.5">
                 Paste Complete SignedReceipt JSON
               </label>
               <textarea
@@ -393,17 +412,17 @@ function VerifyContent() {
                 value={jsonInput}
                 onChange={(e) => setJsonInput(e.target.value)}
                 placeholder="Paste signed receipt JSON object here..."
-                className="w-full bg-credav-surface border border-credav-border/80 rounded-lg p-3 text-xs font-mono text-white focus:outline-none focus:border-credav-cyan"
+                className="w-full bg-surface border border-border/80 rounded-lg p-3 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 leading-relaxed"
               />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="primary"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
                   onClick={verifyLatestReceipt}
                   isLoading={isVerifyingLatest}
+                  className="min-h-[38px] px-4 font-bold"
                 >
                   ✨ Verify my latest receipt
                 </Button>
@@ -411,40 +430,46 @@ function VerifyContent() {
                   size="sm"
                   variant="ghost"
                   onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_GENUINE, null, 2))}
+                  className="min-h-[38px] px-3 text-xs font-mono"
                 >
                   Load Sample Receipt
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-rose-400 hover:text-rose-300"
+                  className="text-rose-400 hover:text-rose-300 min-h-[38px] px-3 text-xs font-mono"
                   onClick={() => setJsonInput(JSON.stringify(SAMPLE_RECEIPT_TAMPERED, null, 2))}
                 >
                   TAMPERED EXAMPLE – expected to fail
                 </Button>
               </div>
+
               <Button
                 onClick={executeVerifyJson}
                 isLoading={isLoading}
                 disabled={!jsonInput.trim()}
                 variant="primary"
+                className="min-h-[38px] px-5"
               >
                 Verify Receipt
               </Button>
             </div>
-            <p className="text-[11px] font-mono text-slate-400 bg-slate-900/40 p-2.5 rounded border border-slate-800">
-              <strong className="text-amber-400/90">Note for Sample Receipt:</strong> Signed by a sample key, so the signer will show as UNKNOWN. Use &quot;Verify my latest receipt&quot; for this deployment&apos;s receipts.
-            </p>
+            <div className="text-xs font-mono text-slate-300 bg-surface/80 p-3 rounded-lg border border-border/70 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                <strong className="text-amber-400">Note for Sample Receipt:</strong> Signed by a sample key, so the signer will show as UNKNOWN. Use &quot;Verify my latest receipt&quot; for this deployment&apos;s receipts.
+              </span>
+            </div>
           </div>
         )}
       </Card>
 
       {/* Error Notice */}
       {errorMessage && (
-        <Card className="border-rose-500/40 bg-rose-500/10">
+        <Card className="border-rose-500/50 bg-rose-500/10 p-4">
           <div className="flex items-center gap-2 text-rose-400 font-medium text-sm">
-            <span>⚠️ Verification Warning:</span>
-            <span>{errorMessage}</span>
+            <XCircle className="w-4 h-4 shrink-0" />
+            <span>Verification Warning: {errorMessage}</span>
           </div>
         </Card>
       )}
@@ -452,19 +477,22 @@ function VerifyContent() {
       {/* Verification Result Display */}
       {result && (
         <div className="space-y-6">
-          {/* Main Status Header */}
+          {/* Main Status Header Panel */}
           <Card
             glow={result.isValid}
-            className={`border ${
-              result.isValid ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-rose-500/50 bg-rose-950/20'
+            className={`p-6 border-2 transition-all ${
+              result.isValid
+                ? 'border-emerald-500/60 bg-emerald-950/20'
+                : 'border-rose-500/60 bg-rose-950/20'
             }`}
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/50">
+              <div className="space-y-1.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant={result.isValid ? 'green' : 'rose'}>
+                  <Badge variant={result.isValid ? 'green' : 'rose'} className="font-mono text-xs font-bold px-2.5 py-0.5">
                     {result.isValid ? 'VERIFIED AUTHENTIC' : 'VERIFICATION FAILED'}
                   </Badge>
+
                   {result.type === 'RECEIPT' && (
                     <Badge
                       variant={
@@ -473,6 +501,7 @@ function VerifyContent() {
                           ? 'green'
                           : 'rose'
                       }
+                      className="font-mono text-xs font-bold px-2.5 py-0.5"
                     >
                       {result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
                       result.badges?.isConfiguredAuthority !== false
@@ -480,11 +509,13 @@ function VerifyContent() {
                         : 'UNKNOWN SIGNER'}
                     </Badge>
                   )}
-                  <span className="text-xs text-slate-400 font-mono">
+
+                  <span className="text-xs text-muted font-mono">
                     Mode: {result.type}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold text-white mt-1">
+
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
                   {result.isValid
                     ? 'Cryptographic & On-Chain Integrity Confirmed'
                     : result.error || 'Discrepancy Detected During Verification'}
@@ -492,80 +523,123 @@ function VerifyContent() {
               </div>
 
               {result.onChain?.explorerUrl && (
-                <a
+                <Link
                   href={result.onChain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-credav-cyan border border-credav-cyan/40 bg-credav-cyan/10 hover:bg-credav-cyan/20 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-mono text-cyan-400 border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors self-start sm:self-auto"
                 >
-                  View on Solana Explorer ↗
-                </a>
+                  <span>Solana Explorer</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </Link>
               )}
             </div>
 
-            {/* Badges Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-credav-border/60">
-              {/* Badge 1: Hash Integrity */}
-              <div className="p-3 rounded-lg bg-credav-surface/60 border border-credav-border/40">
-                <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
-                  1. Canonical Hash
+            {/* Separate Verification Result Rows */}
+            <div className="mt-5 space-y-3">
+              {/* Row 1: Recomputed Canonical Hash */}
+              <div className="p-4 rounded-xl bg-surface/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                <div className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    result.badges?.hashMatches !== false ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+                  }`}>
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-slate-400 uppercase text-[10px] tracking-wider">Row 1: Hash Recomputation (RFC 8785)</div>
+                    <div className="text-white font-semibold">Canonical Payload SHA-256 Digest</div>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 font-medium text-xs">
+
+                <div className="flex items-center gap-2">
                   {result.badges?.hashMatches !== false ? (
-                    <span className="text-emerald-400">✓ Valid RFC 8785</span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Valid Hash Match</span>
+                    </span>
                   ) : (
-                    <span className="text-rose-400">✗ Hash Mismatch</span>
+                    <span className="text-rose-400 font-bold flex items-center gap-1">
+                      <XCircle className="w-4 h-4" />
+                      <span>Hash Mismatch</span>
+                    </span>
                   )}
                 </div>
               </div>
 
-              {/* Badge 2: Authority Signature */}
-              <div className="p-3 rounded-lg bg-credav-surface/60 border border-credav-border/40">
-                <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
-                  2. Authority Signature
-                </div>
-                <div className="mt-1 flex flex-col gap-0.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    {result.badges?.authorityValid !== false ? (
-                      <span className="text-emerald-400">✓ Valid Ed25519</span>
-                    ) : (
-                      <span className="text-rose-400">✗ Invalid Signature</span>
-                    )}
+              {/* Row 2: Authority Signature Verification */}
+              <div className="p-4 rounded-xl bg-surface/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                <div className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    result.badges?.authorityValid !== false ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+                  }`}>
+                    <KeyRound className="w-4 h-4" />
                   </div>
-                  <div className="text-[10px] font-mono">
+                  <div>
+                    <div className="text-slate-400 uppercase text-[10px] tracking-wider">Row 2: Signature Verification</div>
+                    <div className="text-white font-semibold">Ed25519 Authority Key Control</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {result.badges?.authorityValid !== false ? (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Valid Ed25519 Signature</span>
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 font-bold flex items-center gap-1">
+                      <XCircle className="w-4 h-4" />
+                      <span>Invalid Signature</span>
+                    </span>
+                  )}
+
+                  <Badge
+                    variant={
+                      result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
+                      result.badges?.isConfiguredAuthority !== false
+                        ? 'green'
+                        : 'rose'
+                    }
+                    className="font-mono text-[10px] py-0 px-1.5"
+                  >
                     {result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
-                    result.badges?.isConfiguredAuthority !== false ? (
-                      <span className="text-emerald-400 font-semibold">● CREDAVER AUTHORITY</span>
-                    ) : (
-                      <span className="text-rose-400 font-semibold">▲ UNKNOWN SIGNER</span>
-                    )}
+                    result.badges?.isConfiguredAuthority !== false
+                      ? 'CREDAVER AUTHORITY'
+                      : 'UNKNOWN SIGNER'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Row 3: On-Chain SPL Memo Anchor */}
+              <div className="p-4 rounded-xl bg-surface/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                <div className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    result.onChain?.isValid ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'
+                  }`}>
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-slate-400 uppercase text-[10px] tracking-wider">Row 3: On-Chain Memo Anchor</div>
+                    <div className="text-white font-semibold">Solana Devnet Memo Verification</div>
                   </div>
                 </div>
-              </div>
 
-              {/* Badge 3: SPL Memo Match */}
-              <div className="p-3 rounded-lg bg-credav-surface/60 border border-credav-border/40">
-                <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
-                  3. SPL Memo Anchor
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 font-medium text-xs">
+                <div className="flex items-center gap-2">
                   {result.onChain?.isValid ? (
-                    <span className="text-emerald-400">✓ Devnet Memo Match</span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Verified On-Chain {result.onChain.slot ? `(Slot #${result.onChain.slot})` : ''}</span>
+                    </span>
                   ) : result.badges?.onChainAnchored === false ? (
-                    <span className="text-slate-400">○ Off-chain Only</span>
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <span>○ Off-Chain Receipt Only</span>
+                    </span>
                   ) : (
-                    <span className="text-amber-400">⚠️ Pending / Unanchored</span>
+                    <span className="text-amber-400 flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Pending / Unanchored</span>
+                    </span>
                   )}
-                </div>
-              </div>
-
-              {/* Badge 4: Devnet Block Slot */}
-              <div className="p-3 rounded-lg bg-credav-surface/60 border border-credav-border/40">
-                <div className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">
-                  4. Confirmed Slot
-                </div>
-                <div className="mt-1 font-mono text-xs text-credav-cyan">
-                  {result.onChain?.slot ? `Slot #${result.onChain.slot}` : 'N/A'}
                 </div>
               </div>
             </div>
@@ -573,26 +647,26 @@ function VerifyContent() {
 
           {/* On-Chain Transaction Deep Dive */}
           {result.onChain && (
-            <Card>
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 font-mono">
+            <Card className="p-6 border-border/80 bg-surface-card/85 space-y-4">
+              <h3 className="text-sm font-semibold text-white uppercase tracking-wider font-mono">
                 Solana Devnet Memo Inspection
               </h3>
               <div className="space-y-3 text-xs font-mono">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                  <span className="text-slate-400">Tx Signature:</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1.5 border-b border-border/40">
+                  <span className="text-muted">Tx Signature:</span>
                   <span className="md:col-span-2 text-slate-200 break-all">{result.onChain.txSignature}</span>
                 </div>
                 {result.onChain.memoPayload && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                    <span className="text-slate-400">Raw SPL Memo Payload:</span>
-                    <span className="md:col-span-2 text-credav-cyan break-all bg-credav-surface/80 p-2 rounded">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1.5 border-b border-border/40">
+                    <span className="text-muted">Raw SPL Memo Payload:</span>
+                    <span className="md:col-span-2 text-cyan-400 break-all bg-surface p-2 rounded border border-border/60">
                       {result.onChain.memoPayload}
                     </span>
                   </div>
                 )}
                 {result.onChain.parsedMemo && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                    <span className="text-slate-400">Parsed Memo Components:</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1.5 border-b border-border/40">
+                    <span className="text-muted">Parsed Memo Components:</span>
                     <div className="md:col-span-2 space-y-1">
                       <div>Protocol Version: <span className="text-white">{result.onChain.parsedMemo.version}</span></div>
                       <div>Mandate Prefix: <span className="text-white">{result.onChain.parsedMemo.mandateHashPrefix}</span></div>
@@ -602,8 +676,8 @@ function VerifyContent() {
                   </div>
                 )}
                 {result.onChain.blockTime && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                    <span className="text-slate-400">Block Timestamp:</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1.5">
+                    <span className="text-muted">Block Timestamp:</span>
                     <span className="md:col-span-2 text-slate-200">
                       {new Date(result.onChain.blockTime * 1000).toUTCString()} ({result.onChain.blockTime})
                     </span>
@@ -615,62 +689,62 @@ function VerifyContent() {
 
           {/* Receipt Details (if available) */}
           {(result.receipt || result.linkedReceipt) && (
-            <Card>
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 font-mono">
+            <Card className="p-6 border-border/80 bg-surface-card/85 space-y-4">
+              <h3 className="text-sm font-semibold text-white uppercase tracking-wider font-mono">
                 Decoded Receipt Authorization Data
               </h3>
               {(() => {
                 const r = result.receipt || result.linkedReceipt;
                 return (
-                  <div className="space-y-2 text-xs font-mono">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Receipt ID:</span>
-                      <span className="md:col-span-2 text-white">{r.receiptId}</span>
+                  <div className="space-y-2.5 text-xs font-mono">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Receipt ID:</span>
+                      <span className="md:col-span-2 text-white font-bold">{r.receiptId}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Decision:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Decision:</span>
                       <span className="md:col-span-2 font-bold text-emerald-400">{r.decision}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Reason Codes:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Reason Codes:</span>
                       <span className="md:col-span-2 text-slate-200">{r.reasonCodes?.join(', ')}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Mandate Hash:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Mandate Hash:</span>
                       <span className="md:col-span-2 text-slate-200 break-all">{r.mandateHash}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Agent Identity:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Agent Identity:</span>
                       <span className="md:col-span-2 text-slate-200 break-all">{r.agentPubkey}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Merchant Pubkey:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Merchant Pubkey:</span>
                       <span className="md:col-span-2 text-slate-200 break-all">{r.merchantPubkey}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Amount &amp; Asset:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Amount &amp; Asset:</span>
                       <span className="md:col-span-2 text-white">
                         {r.amount} base units ({r.asset})
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Issued At:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Issued At:</span>
                       <span className="md:col-span-2 text-slate-200">
                         {new Date(r.issuedAt).toUTCString()} ({r.issuedAt})
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Authority Signer Pubkey:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Authority Signer Pubkey:</span>
                       <span className="md:col-span-2 text-slate-200 break-all">{r.authorityPubkey || 'N/A'}</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Configured Authority:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-border/40">
+                      <span className="text-muted">Configured Authority:</span>
                       <span className="md:col-span-2 text-slate-200 break-all">
                         {result.configuredAuthorityPubkey || configuredAuthority || 'N/A'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1 border-b border-credav-border/30">
-                      <span className="text-slate-400">Signer Verification:</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 py-1">
+                      <span className="text-muted">Signer Verification:</span>
                       <span
                         className={`md:col-span-2 font-bold ${
                           result.signerStatus === 'SIGNED BY CREDAVER AUTHORITY' ||
@@ -698,7 +772,13 @@ function VerifyContent() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400 font-mono">Loading verification gateway...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-12 text-center text-muted font-mono text-sm">
+          Loading verification gateway...
+        </div>
+      }
+    >
       <VerifyContent />
     </Suspense>
   );

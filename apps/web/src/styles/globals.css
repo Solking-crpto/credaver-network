@@ -3,30 +3,80 @@
 @tailwind utilities;
 
 :root {
+  /* Brand Tokens (Single Source of Truth) */
   --background: #03050d;
+  --surface: #0a0f22;
+  --surface-card: #0c132c;
+  --surface-elevated: #101736;
+  --border: #162044;
+  --border-subtle: rgba(22, 32, 68, 0.6);
+  --muted: #7e8fa6;
+  --accent-cyan: #00d8ff;
+  --accent-blue: #0a64ff;
+  --accent-violet: #8a3dff;
+  --accent-magenta: #c04bff;
   --foreground: #f1f5f9;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+  overflow-x: hidden;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--background);
   min-height: 100vh;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* CredaVer Glow and Glass Effects */
+/* Glass and Surface Panels */
 .glass-panel {
-  background: rgba(10, 15, 34, 0.75);
-  backdrop-filter: blur(12px);
+  background: rgba(10, 15, 34, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(22, 32, 68, 0.8);
 }
 
-.glass-panel:hover {
-  border-color: rgba(0, 216, 255, 0.3);
+.glass-panel-elevated {
+  background: rgba(12, 19, 44, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(22, 32, 68, 0.9);
 }
 
+/* Restrained Brand Gradient (Used only for key headline words & primary buttons) */
 .text-gradient {
   background: linear-gradient(135deg, #00d8ff 0%, #0a64ff 50%, #8a3dff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #00d8ff 0%, #0a64ff 50%, #8a3dff 100%);
+}
+
+/* Accessible Focus Rings */
+*:focus-visible {
+  outline: 2px solid #00d8ff;
+  outline-offset: 2px;
+}
+
+/* Respect Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

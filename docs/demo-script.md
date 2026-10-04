@@ -5,6 +5,11 @@
 **Target Duration**: 1:55 - 2:00  
 **Live URL**: `http://localhost:3000` (Dashboard) and `/verify` (Verification Portal)  
 
+> [!NOTE]
+> **Script Separation Pending**: This document currently contains the initial combined 2-minute pitch and demo. It is pending separation into two distinct scripts per Colosseum submission guidelines:
+> 1. **Founder Pitch Video (2 to 3 minutes)**: Team background, motivation, agentic market opportunity, customer acquisition strategy, and breakout product potential.
+> 2. **Technical Demo Video (at most 3 minutes)**: Live working slice showing Phantom mandate issuance, 6 policy scenarios, live Solana devnet x402 settlement, and on-chain verification.
+
 ---
 
 ## Timing Breakdown
