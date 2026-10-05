@@ -21,6 +21,7 @@ import {
   checkFacilitatorHealth,
   executeRealDevnetPayment,
 } from '../../../lib/real-devnet-payment';
+import { getOrCreateSessionId, attachSessionCookie } from '../../../lib/session';
 
 import { z } from 'zod';
 
@@ -67,6 +68,15 @@ export async function POST(req: NextRequest) {
     const authorityKeypair = getServerReceiptAuthorityKeypair();
     const anchorKeypair = getServerAnchorKeypair();
 
+    const { sessionId, isNew } = getOrCreateSessionId(req);
+    const sendResponse = (body: any, init?: { status?: number }) => {
+      const res = NextResponse.json(body, init);
+      if (isNew) {
+        attachSessionCookie(res, sessionId);
+      }
+      return res;
+    };
+
     const baseSignOptions = {
       store,
       paymentSecretKey: payerKeypair.secretKey,
@@ -101,7 +111,8 @@ export async function POST(req: NextRequest) {
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
@@ -128,8 +139,11 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      signResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(signResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'ALLOW',
         statusCode: 200,
         decision: signResult.decision,
@@ -140,7 +154,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. SCENARIO: OVER_CAP
+    // 2. SCENARIO: OVER_CAP (Exceeds Per-Tx Limit)
     if (scenario === 'OVER_CAP') {
       const mandate = issueSignedMandate(
         {
@@ -149,26 +163,27 @@ export async function POST(req: NextRequest) {
           agentPubkey: agent.publicKey,
           allowedMerchants: [merchant.publicKey],
           allowedAssets: [USDC_ASSET],
-          maxPerTx: '2000000',
-          totalCap: '5000000', // Cap is 5.0 USDC
+          maxPerTx: '2000000', // 2.0 USDC max per tx
+          totalCap: '10000000', // 10.0 USDC total cap
           validFrom: Date.now() - 5000,
           expiresAt: Date.now() + 3600000,
           nonce: `nonce-${Date.now()}-cap`,
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
-      // Attempt to spend 6.0 USDC (exceeds cap)
+      // Attempt to spend 3.0 USDC (exceeds maxPerTx of 2.0 USDC)
       const proof = createSignedPaymentProof(
         {
           mandateHash: mandate.mandateHash,
           agentPubkey: agent.publicKey,
           merchantPubkey: merchant.publicKey,
           asset: USDC_ASSET,
-          amount: '6000000',
+          amount: '3000000',
           audience: 'https://demo-merchant.solana/api/service',
           network: NETWORK,
           nonce: `nonce-${Date.now()}-proof-cap`,
@@ -185,14 +200,17 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      signResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(signResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'OVER_CAP',
         statusCode: 403,
         decision: signResult.decision,
         latencyMs,
         reasonCodes: signResult.receipt.reasonCodes,
-        details: 'Requested payment exceeds total mandate cap. Transaction signature refused.',
+        details: 'Requested payment exceeds per-transaction limit ($3.00 > $2.00 max). Transaction signature refused with AMOUNT_EXCEEDS_PER_TX.',
         mandateId: mandate.mandateId,
         receipt: signResult.receipt,
       });
@@ -215,7 +233,8 @@ export async function POST(req: NextRequest) {
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
@@ -246,8 +265,11 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      signResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(signResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'REVOKED',
         statusCode: 403,
         decision: signResult.decision,
@@ -276,7 +298,8 @@ export async function POST(req: NextRequest) {
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
@@ -303,8 +326,11 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      signResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(signResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'EXPIRED',
         statusCode: 403,
         decision: signResult.decision,
@@ -333,7 +359,8 @@ export async function POST(req: NextRequest) {
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
@@ -370,8 +397,11 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      replayResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(replayResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'REPLAY',
         statusCode: 403,
         decision: replayResult.decision,
@@ -401,7 +431,8 @@ export async function POST(req: NextRequest) {
           network: NETWORK,
         },
         operator.secretKey,
-        agent.secretKey
+        agent.secretKey,
+        sessionId
       );
       await store.saveMandate(mandate);
 
@@ -429,8 +460,11 @@ export async function POST(req: NextRequest) {
         transactionMessageBytes: Buffer.from('mock-svm-tx-message-bytes').toString('base64'),
       });
 
+      signResult.receipt.sessionId = sessionId;
+      await store.saveReceipt(signResult.receipt);
+
       const latencyMs = Date.now() - startTime;
-      return NextResponse.json({
+      return sendResponse({
         scenario: 'REVIEW',
         statusCode: 202,
         decision: signResult.decision,
@@ -455,7 +489,7 @@ export async function POST(req: NextRequest) {
         'Daily limit for live devnet payments reached (40/day). Please try again tomorrow.'
       );
       if (!dailyCap.allowed) {
-        return NextResponse.json(
+        return sendResponse(
           {
             error: 'RATE_LIMIT_EXCEEDED',
             message: dailyCap.message,
@@ -472,7 +506,7 @@ export async function POST(req: NextRequest) {
         'Per-IP rate limit exceeded for live devnet payments (5 requests per minute). Please wait before trying again.'
       );
       if (!ipCap.allowed) {
-        return NextResponse.json(
+        return sendResponse(
           {
             error: 'RATE_LIMIT_EXCEEDED',
             message: ipCap.message,
@@ -484,7 +518,7 @@ export async function POST(req: NextRequest) {
       // Check public facilitator health first
       const facHealth = await checkFacilitatorHealth();
       if (!facHealth.ok) {
-        return NextResponse.json(
+        return sendResponse(
           {
             error: 'FACILITATOR_UNAVAILABLE',
             message:
@@ -498,7 +532,7 @@ export async function POST(req: NextRequest) {
       // Check devnet RPC connectivity and server payer balance
       const balanceCheck = await checkDevnetPayerBalance();
       if (!balanceCheck.ok) {
-        return NextResponse.json(
+        return sendResponse(
           {
             error: 'INSUFFICIENT_DEVNET_FUNDS',
             message:
@@ -512,29 +546,53 @@ export async function POST(req: NextRequest) {
       }
 
       // Execute live settlement
-      const paymentResult = await executeRealDevnetPayment();
+      try {
+        const paymentResult = await executeRealDevnetPayment({
+          sessionId,
+        });
 
-      return NextResponse.json({
-        scenario: 'REAL_DEVNET',
-        statusCode: 200,
-        decision: 'ALLOW',
-        latencyMs: paymentResult.latencyMs,
-        details:
-          'Real x402 payment settled on Solana Devnet via CredaVer Constrained Signer and official public facilitator.',
-        txSignature: paymentResult.txSignature,
-        explorerUrl: paymentResult.explorerUrl,
-        mandateId: paymentResult.mandate.mandateId,
-        receipt: paymentResult.receipt,
-        payerPubkey: paymentResult.payerPubkey,
-        merchantPubkey: paymentResult.merchantPubkey,
-        resourceData: paymentResult.resourceData,
-        anchorTxSignature: paymentResult.anchorTxSignature,
-        anchorExplorerUrl: paymentResult.anchorExplorerUrl,
-        anchorStatus: paymentResult.anchorStatus,
-      });
+        return sendResponse({
+          scenario: 'REAL_DEVNET',
+          statusCode: 200,
+          decision: 'ALLOW',
+          settlementStatus: 'SETTLED',
+          latencyMs: paymentResult.latencyMs,
+          details:
+            'Real x402 payment settled on Solana Devnet via CredaVer Constrained Signer and official public facilitator.',
+          txSignature: paymentResult.txSignature,
+          explorerUrl: paymentResult.explorerUrl,
+          mandateId: paymentResult.mandate.mandateId,
+          receipt: paymentResult.receipt,
+          payerPubkey: paymentResult.payerPubkey,
+          merchantPubkey: paymentResult.merchantPubkey,
+          resourceData: paymentResult.resourceData,
+          anchorTxSignature: paymentResult.anchorTxSignature,
+          anchorExplorerUrl: paymentResult.anchorExplorerUrl,
+          anchorStatus: paymentResult.anchorStatus,
+        });
+      } catch (payErr: any) {
+        if (payErr.settlementFailed) {
+          return sendResponse(
+            {
+              scenario: 'REAL_DEVNET',
+              statusCode: 502,
+              error: 'SETTLEMENT_FAILED',
+              decision: 'ALLOW',
+              settlementStatus: 'FAILED',
+              message: 'Policy allowed, settlement failed',
+              details: payErr.message || 'Policy allowed, settlement failed',
+              latencyMs: payErr.latencyMs,
+              mandateId: payErr.mandate?.mandateId,
+              receipt: payErr.receipt,
+            },
+            { status: 502 }
+          );
+        }
+        throw payErr;
+      }
     }
 
-    return NextResponse.json(
+    return sendResponse(
       { error: 'UNKNOWN_SCENARIO', message: `Scenario "${scenario}" is not supported` },
       { status: 400 }
     );

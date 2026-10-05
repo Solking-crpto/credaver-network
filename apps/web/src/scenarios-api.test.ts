@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as scenarioPostRoute } from './app/api/scenarios/route';
 import { GET as reviewsGetRoute, POST as reviewsPostRoute } from './app/api/reviews/route';
+import { GET as verifyGetRoute } from './app/api/verify/route';
 import { ReasonCode } from '@credaver/core';
 import { checkRedisRateLimit, resetRateLimits } from './lib/rate-limit';
 
@@ -29,7 +30,7 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     expect(data.latencyMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('2. Scenario OVER_CAP: returns 403, DENY, and AMOUNT_EXCEEDS_CAP', async () => {
+  it('2. Scenario OVER_CAP: returns 403, DENY, and AMOUNT_EXCEEDS_PER_TX', async () => {
     const req = new NextRequest('http://localhost:3000/api/scenarios', {
       method: 'POST',
       body: JSON.stringify({ scenario: 'OVER_CAP' }),
@@ -40,7 +41,7 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     const data = await res.json();
     expect(data.decision).toBe('DENY');
     expect(data.statusCode).toBe(403);
-    expect(data.reasonCodes).toContain(ReasonCode.AMOUNT_EXCEEDS_CAP);
+    expect(data.reasonCodes).toContain(ReasonCode.AMOUNT_EXCEEDS_PER_TX);
   });
 
   it('3. Scenario REVOKED: returns 403, DENY, and REVOKED_MANDATE', async () => {
@@ -131,11 +132,24 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     const approveData = await approveRes!.json();
     expect(approveData.action).toBe('APPROVE');
     expect(approveData.decision).toBe('ALLOW');
-    expect(approveData.signature).toBeDefined();
+    expect(approveData.note).toBe('Decision recorded; no payment is made in this demo');
     expect(approveData.receipt.decision).toBe('ALLOW');
+
+    // Regression check: verify through /api/verify and expect a valid signature from configured authority
+    const verifyReq = new NextRequest(
+      `http://localhost:3000/api/verify?receiptId=${approveData.receipt.receiptId}`,
+      { method: 'GET' }
+    );
+    const verifyRes = await verifyGetRoute(verifyReq);
+    expect(verifyRes.status).toBe(200);
+    const verifyData = await verifyRes.json();
+    expect(verifyData.verification.isValid).toBe(true);
+    expect(verifyData.verification.badges.authorityValid).toBe(true);
+    expect(verifyData.verification.badges.isConfiguredAuthority).toBe(true);
+    expect(verifyData.verification.signerStatus).toBe('SIGNED BY CREDAVER AUTHORITY');
   });
 
-  it('8. Operator Reviews API: can reject a pending review', async () => {
+  it('8. Operator Reviews API: can reject a pending review and verify valid authority signature', async () => {
     // Generate a review receipt
     const scReq = new NextRequest('http://localhost:3000/api/scenarios', {
       method: 'POST',
@@ -162,6 +176,19 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     expect(rejectData.action).toBe('REJECT');
     expect(rejectData.decision).toBe('DENY');
     expect(rejectData.reasonCodes).toContain(ReasonCode.OPERATOR_REJECTED);
+
+    // Regression check: verify rejected receipt through /api/verify
+    const verifyReq = new NextRequest(
+      `http://localhost:3000/api/verify?receiptId=${rejectData.receipt.receiptId}`,
+      { method: 'GET' }
+    );
+    const verifyRes = await verifyGetRoute(verifyReq);
+    expect(verifyRes.status).toBe(200);
+    const verifyData = await verifyRes.json();
+    expect(verifyData.verification.isValid).toBe(true);
+    expect(verifyData.verification.badges.authorityValid).toBe(true);
+    expect(verifyData.verification.badges.isConfiguredAuthority).toBe(true);
+    expect(verifyData.verification.signerStatus).toBe('SIGNED BY CREDAVER AUTHORITY');
   });
 
   it('9. Scenario REAL_DEVNET: validates scenario enum and returns structured response or graceful fallback', async () => {
@@ -224,6 +251,33 @@ describe('apps/web: Milestone 5 Interactive Scenarios & Reviews API', () => {
     expect(data.error).toBe('RATE_LIMIT_EXCEEDED');
     expect(data.message).toContain('Daily limit for live devnet payments reached');
   });
+
+  it('12. Settlement Integrity: reverses spend and marks settlementStatus FAILED on facilitator failure', async () => {
+    const { executeRealDevnetPayment } = await import('./lib/real-devnet-payment');
+    const { getServerStore } = await import('./lib/server-state');
+    const store = getServerStore();
+
+    let threw = false;
+    try {
+      await executeRealDevnetPayment({ simulatedFailure: true });
+    } catch (err: any) {
+      threw = true;
+      expect(err.settlementFailed).toBe(true);
+      expect(err.settlementStatus).toBe('FAILED');
+      expect(err.decision).toBe('ALLOW');
+      expect(err.receipt).toBeDefined();
+      expect(err.receipt.settlementStatus).toBe('FAILED');
+
+      // Mandate spend must be reversed back to 0n!
+      const currentSpend = await store.getMandateSpend(err.mandate.mandateId);
+      expect(currentSpend).toBe(0n);
+
+      // Stored receipt must be recorded as FAILED
+      const storedReceipt = await store.getReceipt(err.receipt.receiptId);
+      expect(storedReceipt?.settlementStatus).toBe('FAILED');
+    }
+    expect(threw).toBe(true);
+  }, 30000);
 });
 
 

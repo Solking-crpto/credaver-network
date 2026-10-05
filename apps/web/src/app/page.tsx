@@ -25,6 +25,7 @@ export default function HomePage() {
   // Mandates State
   const [mandates, setMandates] = useState<any[]>([]);
   const [mandatesLoading, setMandatesLoading] = useState(false);
+  const [showAllMandates, setShowAllMandates] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   // Receipts State
@@ -37,6 +38,7 @@ export default function HomePage() {
     isConnected: isPhantomConnected,
     connect: connectPhantom,
     signMessage: signPhantomMessage,
+    openModal,
   } = usePhantomWallet();
 
   const [showIssuePanel, setShowIssuePanel] = useState(false);
@@ -57,14 +59,16 @@ export default function HomePage() {
 
   // Load Initial Data
   useEffect(() => {
-    fetchMandates();
+    fetchMandates(false);
     fetchReceipts();
   }, []);
 
-  const fetchMandates = async () => {
+  const fetchMandates = async (showAll?: boolean) => {
     setMandatesLoading(true);
     try {
-      const res = await fetch('/api/mandates');
+      const isAll = typeof showAll === 'boolean' ? showAll : showAllMandates;
+      const url = isAll ? '/api/mandates?showAll=true' : '/api/mandates';
+      const res = await fetch(url);
       const data = await res.json();
       if (res.ok && data.mandates) {
         setMandates(data.mandates);
@@ -74,6 +78,12 @@ export default function HomePage() {
     } finally {
       setMandatesLoading(false);
     }
+  };
+
+  const handleToggleShowAll = () => {
+    const next = !showAllMandates;
+    setShowAllMandates(next);
+    fetchMandates(next);
   };
 
   const fetchReceipts = async () => {
@@ -106,7 +116,7 @@ export default function HomePage() {
 
   const handleSignAndIssueMandate = async () => {
     if (!phantomPubkey) {
-      await connectPhantom();
+      openModal();
       return;
     }
 
@@ -421,13 +431,15 @@ export default function HomePage() {
         mandates={mandates}
         mandatesLoading={mandatesLoading}
         revokingId={revokingId}
-        onRefresh={fetchMandates}
+        onRefresh={() => fetchMandates()}
         onRevoke={handleRevokeMandate}
+        showAllMandates={showAllMandates}
+        onToggleShowAll={handleToggleShowAll}
         showIssuePanel={showIssuePanel}
         onToggleIssuePanel={handleOpenIssuePanel}
         phantomPubkey={phantomPubkey}
         isPhantomConnected={isPhantomConnected}
-        onConnectPhantom={connectPhantom}
+        onConnectPhantom={openModal}
         inMemoryAgent={inMemoryAgent}
         mandateMaxPerTx={mandateMaxPerTx}
         setMandateMaxPerTx={setMandateMaxPerTx}

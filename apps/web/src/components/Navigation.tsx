@@ -3,25 +3,39 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePhantomWallet } from '../hooks/usePhantomWallet';
+import { useWallet } from '../hooks/useWallet';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { Menu, X, Shield, ExternalLink, Wallet } from 'lucide-react';
+import { WalletModal } from './WalletModal';
+import { Menu, X, Shield, ExternalLink, Wallet, Copy, Check } from 'lucide-react';
+import { shortenAddress } from '../lib/wallet-standard';
 
 export const Navigation: React.FC = () => {
   const {
+    wallets,
     publicKey,
     isConnected,
     isConnecting,
     isAuthenticated,
+    isModalOpen,
+    error,
+    openModal,
+    closeModal,
     connect,
     disconnect,
     authenticateWithChallenge,
-  } = usePhantomWallet();
+  } = useWallet();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const truncate = (key: string) => `${key.slice(0, 4)}...${key.slice(-4)}`;
+  const handleCopyAddress = () => {
+    if (publicKey) {
+      navigator.clipboard.writeText(publicKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Close mobile menu on Escape key
   useEffect(() => {
@@ -107,15 +121,22 @@ export const Navigation: React.FC = () => {
         <div className="hidden md:flex items-center gap-3">
           {isConnected && publicKey ? (
             <div className="flex items-center gap-2">
-              <div className="text-right">
-                <div className="text-xs font-mono text-slate-200">{truncate(publicKey)}</div>
-                <div className="text-[10px] text-muted font-mono">
-                  {isAuthenticated ? (
-                    <span className="text-emerald-400">● Verified</span>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-border/80">
+                <span className="text-xs font-mono text-slate-200">
+                  {shortenAddress(publicKey)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyAddress}
+                  title="Copy address"
+                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-surface-card transition-colors"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
                   ) : (
-                    <span className="text-amber-400">● Unverified</span>
+                    <Copy className="w-3.5 h-3.5" />
                   )}
-                </div>
+                </button>
               </div>
 
               {!isAuthenticated && (
@@ -132,12 +153,12 @@ export const Navigation: React.FC = () => {
             <Button
               size="sm"
               variant="primary"
-              onClick={connect}
+              onClick={openModal}
               isLoading={isConnecting}
               className="shadow-glow min-h-[40px] px-4"
             >
               <Wallet className="w-4 h-4 mr-1.5" />
-              <span>Connect Phantom</span>
+              <span>Connect Wallet</span>
             </Button>
           )}
         </div>
@@ -222,18 +243,28 @@ export const Navigation: React.FC = () => {
                 variant="primary"
                 className="w-full justify-center min-h-[44px]"
                 onClick={() => {
-                  connect();
                   setMobileMenuOpen(false);
+                  openModal();
                 }}
                 isLoading={isConnecting}
               >
                 <Wallet className="w-4 h-4 mr-2" />
-                <span>Connect Phantom</span>
+                <span>Connect Wallet</span>
               </Button>
             )}
           </div>
         </div>
       )}
+
+      {/* Wallet Standard Modal */}
+      <WalletModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        wallets={wallets}
+        onSelectWallet={connect}
+        isConnecting={isConnecting}
+        error={error}
+      />
     </header>
   );
 };

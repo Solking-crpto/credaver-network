@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerStore, getServerPayerKeypair } from '../../../lib/server-state';
-import {
-  ReasonCode,
-  issueSignedReceipt,
-  createPrivateKeyFromRaw,
-  decodeBase58,
-  encodeBase58,
-} from '@credaver/core';
-import { sign } from 'node:crypto';
+import { getServerStore, getServerReceiptAuthorityKeypair } from '../../../lib/server-state';
+import { ReasonCode, issueSignedReceipt } from '@credaver/core';
 import { z } from 'zod';
 
 const ReviewActionSchema = z.object({
@@ -63,7 +56,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const payerKeypair = getServerPayerKeypair();
+    const authorityKeypair = getServerReceiptAuthorityKeypair();
 
     if (action === 'APPROVE') {
       // 1. Record cumulative spend for approved amount
@@ -72,14 +65,7 @@ export async function POST(req: NextRequest) {
         await store.recordMandateSpend(mandate.mandateId, BigInt(receipt.amount));
       }
 
-      // 2. Sign transaction message with custody payment key
-      const mockMsgBytes = Buffer.from('mock-approved-tx-message');
-      const privBytes = decodeBase58(payerKeypair.secretKey);
-      const privKey = createPrivateKeyFromRaw(privBytes.slice(0, 32));
-      const sigBuffer = sign(null, mockMsgBytes, privKey);
-      const signature = encodeBase58(new Uint8Array(sigBuffer));
-
-      // 3. Issue updated receipt with ALLOW decision
+      // 2. Issue updated receipt with ALLOW decision signed by configured authority
       const updatedBody = {
         receiptId: `rcpt-apprv-${Date.now()}`,
         mandateHash: receipt.mandateHash,
@@ -94,13 +80,13 @@ export async function POST(req: NextRequest) {
         policyVersion: receipt.policyVersion,
         issuedAt: Date.now(),
         reviewedBy: reviewerPubkey || 'operator-admin',
-        authorityPubkey: payerKeypair.publicKey,
+        authorityPubkey: authorityKeypair.publicKey,
       };
 
-      const approvedReceipt = issueSignedReceipt(updatedBody, payerKeypair.secretKey);
+      const approvedReceipt = issueSignedReceipt(updatedBody, authorityKeypair.secretKey);
       await store.saveReceipt(approvedReceipt);
 
-      // 4. Save audit event
+      // 3. Save audit event
       await store.saveAuditEvent({
         eventId: `audit-rev-app-${Date.now()}`,
         type: 'REVIEW_APPROVED',
@@ -118,13 +104,13 @@ export async function POST(req: NextRequest) {
         action: 'APPROVE',
         originalReceiptId: receiptId,
         decision: 'ALLOW',
-        signature,
+        note: 'Decision recorded; no payment is made in this demo',
         receipt: approvedReceipt,
       });
     }
 
     if (action === 'REJECT') {
-      // Issue updated receipt with DENY decision
+      // Issue updated receipt with DENY decision signed by configured authority
       const updatedBody = {
         receiptId: `rcpt-rej-${Date.now()}`,
         mandateHash: receipt.mandateHash,
@@ -139,10 +125,10 @@ export async function POST(req: NextRequest) {
         policyVersion: receipt.policyVersion,
         issuedAt: Date.now(),
         reviewedBy: reviewerPubkey || 'operator-admin',
-        authorityPubkey: payerKeypair.publicKey,
+        authorityPubkey: authorityKeypair.publicKey,
       };
 
-      const rejectedReceipt = issueSignedReceipt(updatedBody, payerKeypair.secretKey);
+      const rejectedReceipt = issueSignedReceipt(updatedBody, authorityKeypair.secretKey);
       await store.saveReceipt(rejectedReceipt);
 
       // Save audit event

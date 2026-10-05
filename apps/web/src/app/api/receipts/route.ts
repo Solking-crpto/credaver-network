@@ -26,16 +26,20 @@ export async function GET(req: NextRequest) {
 
     const { agentPubkey, merchantPubkey, decision } = parseResult.data;
 
+    const sessionCookie = req.cookies.get('credav_session')?.value;
     const store = getServerStore();
     const receipts = await store.listReceipts({
       agentPubkey,
       merchantPubkey,
       decision,
+      sessionId: sessionCookie || undefined,
     });
 
+    const limitedReceipts = receipts.slice(0, 20);
+
     return NextResponse.json({
-      receipts,
-      count: receipts.length,
+      receipts: limitedReceipts,
+      count: limitedReceipts.length,
     });
   } catch (err: any) {
     return NextResponse.json(

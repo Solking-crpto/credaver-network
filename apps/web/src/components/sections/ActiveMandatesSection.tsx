@@ -24,13 +24,15 @@ interface ActiveMandatesSectionProps {
   revokingId: string | null;
   onRefresh: () => Promise<void>;
   onRevoke: (mandateId: string) => Promise<void>;
+  showAllMandates?: boolean;
+  onToggleShowAll?: () => void;
 
   // Phantom & in-memory issuance
   showIssuePanel: boolean;
   onToggleIssuePanel: () => void;
   phantomPubkey: string | null;
   isPhantomConnected: boolean;
-  onConnectPhantom: () => Promise<any>;
+  onConnectPhantom: () => Promise<any> | void;
   inMemoryAgent: InMemoryAgent | null;
   mandateMaxPerTx: string;
   setMandateMaxPerTx: (val: string) => void;
@@ -56,6 +58,8 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
   revokingId,
   onRefresh,
   onRevoke,
+  showAllMandates = false,
+  onToggleShowAll,
   showIssuePanel,
   onToggleIssuePanel,
   phantomPubkey,
@@ -108,6 +112,9 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
           <Badge variant="cyan" className="font-mono text-xs">
             {mandates.length}
           </Badge>
+          {!showAllMandates && (
+            <span className="text-[11px] text-muted hidden sm:inline">(Active only)</span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -120,6 +127,18 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
             <Key className="w-3.5 h-3.5 mr-1.5" />
             <span>{showIssuePanel ? 'Close Issuance' : 'Issue Mandate with Phantom'}</span>
           </Button>
+
+          {onToggleShowAll && (
+            <Button
+              size="sm"
+              variant={showAllMandates ? 'secondary' : 'outline'}
+              onClick={onToggleShowAll}
+              className="min-h-[40px] px-3 text-xs"
+              title={showAllMandates ? 'Showing all mandates including expired and revoked' : 'Showing active mandates only'}
+            >
+              <span>{showAllMandates ? 'Show Active Only' : 'Show Expired & Revoked'}</span>
+            </Button>
+          )}
 
           <Button
             size="sm"

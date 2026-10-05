@@ -155,6 +155,9 @@ export class RedisStore implements ICredaverStore {
       if (m) list.push(m);
     }
     let filtered = list;
+    if (filter?.sessionId) {
+      filtered = filtered.filter((m) => m.sessionId === filter.sessionId);
+    }
     if (filter?.operatorPubkey) {
       filtered = filtered.filter((m) => m.operatorPubkey === filter.operatorPubkey);
     }
@@ -163,6 +166,10 @@ export class RedisStore implements ICredaverStore {
     }
     if (filter?.revoked !== undefined) {
       filtered = filtered.filter((m) => Boolean(m.revoked) === filter.revoked);
+    }
+    if (filter?.activeOnly) {
+      const now = Date.now();
+      filtered = filtered.filter((m) => !m.revoked && m.expiresAt > now);
     }
     return filtered.sort((a, b) => b.validFrom - a.validFrom);
   }
@@ -184,6 +191,9 @@ export class RedisStore implements ICredaverStore {
       if (r) list.push(r);
     }
     let filtered = list;
+    if (filter?.sessionId) {
+      filtered = filtered.filter((r) => r.sessionId === filter.sessionId);
+    }
     if (filter?.agentPubkey) {
       filtered = filtered.filter((r) => r.agentPubkey === filter.agentPubkey);
     }

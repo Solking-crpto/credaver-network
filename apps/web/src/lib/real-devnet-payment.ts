@@ -155,6 +155,8 @@ export interface RealPaymentExecutionResult {
 
 export async function executeRealDevnetPayment(options?: {
   anchorOnChain?: boolean;
+  sessionId?: string;
+  simulatedFailure?: boolean;
 }): Promise<RealPaymentExecutionResult> {
   const startTime = Date.now();
   const payerKeypair = getServerPayerKeypair();
@@ -198,7 +200,8 @@ export async function executeRealDevnetPayment(options?: {
         network: SOLANA_DEVNET_GENESIS,
       },
       operator.secretKey,
-      agent.secretKey
+      agent.secretKey,
+      options?.sessionId ?? null
     );
     await store.saveMandate(mandate);
 
@@ -224,6 +227,9 @@ export async function executeRealDevnetPayment(options?: {
           anchorOnChain: false,
         });
 
+        if (options?.sessionId) {
+          signResult.receipt.sessionId = options.sessionId;
+        }
         capturedReceipt = signResult.receipt;
         return signResult;
       },
@@ -242,25 +248,72 @@ export async function executeRealDevnetPayment(options?: {
     client.registerPolicy(createCredaverClientPolicy(mandate));
 
     const payingFetch = wrapFetchWithPayment(fetch, client);
-    const response = await payingFetch(`${merchantUrl}/api/weather`);
-
+    
+    let response: any = null;
+    let paymentError: Error | null = null;
     let txSignature = '';
-    const paymentResponseHeader = response.headers.get('payment-response');
-    if (paymentResponseHeader) {
-      const decodedPaymentResp = Buffer.from(paymentResponseHeader, 'base64').toString('utf8');
-      try {
-        const parsedResp = JSON.parse(decodedPaymentResp);
-        txSignature = parsedResp.txSignature || parsedResp.transaction || '';
-      } catch {
-        // ignore
+    let responseBody: any = null;
+
+    try {
+      response = await payingFetch(`${merchantUrl}/api/weather`);
+
+      if (options?.simulatedFailure) {
+        throw new Error('Settlement failed: facilitator connection timeout during settlement');
       }
+
+      const paymentResponseHeader = response.headers?.get('payment-response');
+      if (paymentResponseHeader) {
+        const decodedPaymentResp = Buffer.from(paymentResponseHeader, 'base64').toString('utf8');
+        try {
+          const parsedResp = JSON.parse(decodedPaymentResp);
+          txSignature = parsedResp.txSignature || parsedResp.transaction || '';
+        } catch {
+          // ignore
+        }
+      }
+
+      if (response.ok) {
+        responseBody = await response.json();
+      } else {
+        const errText = await response.text().catch(() => '');
+        throw new Error(
+          `Facilitator or merchant returned HTTP ${response.status}: ${errText || response.statusText}`
+        );
+      }
+
+      if (!txSignature) {
+        throw new Error('Settlement failed: no transaction signature returned by facilitator');
+      }
+    } catch (err: any) {
+      paymentError = err;
     }
 
-    const responseBody = await response.json();
+    // SETTLEMENT INTEGRITY CHECK:
+    // If facilitator settlement fails after policy ALLOW, do not leave an ALLOW receipt
+    // or recorded mandate spend. Mark settlementStatus: FAILED, reverse spend, and save receipt.
+    if (paymentError || !txSignature) {
+      if (capturedReceipt) {
+        capturedReceipt.settlementStatus = 'FAILED';
+        // reverse recorded spend in store
+        await store.recordMandateSpend(mandate.mandateId, -BigInt(capturedReceipt.amount));
+        await store.saveReceipt(capturedReceipt);
+      }
+
+      const latencyMs = Date.now() - startTime;
+      const failureError: any = new Error(
+        paymentError?.message || 'Policy allowed, settlement failed'
+      );
+      failureError.settlementFailed = true;
+      failureError.decision = 'ALLOW';
+      failureError.settlementStatus = 'FAILED';
+      failureError.mandate = mandate;
+      failureError.receipt = capturedReceipt;
+      failureError.latencyMs = latencyMs;
+      throw failureError;
+    }
+
     const latencyMs = Date.now() - startTime;
-    const explorerUrl = txSignature
-      ? `https://explorer.solana.com/tx/${txSignature}?cluster=devnet`
-      : `https://explorer.solana.com/address/${payerKeypair.publicKey}?cluster=devnet`;
+    const explorerUrl = `https://explorer.solana.com/tx/${txSignature}?cluster=devnet`;
 
     // 6. Optional On-Chain Anchoring via SPL Memo on Solana Devnet
     let anchorTxSignature: string | undefined;
@@ -292,9 +345,8 @@ export async function executeRealDevnetPayment(options?: {
 
     // Persist settlement transaction signature & anchor memo signature on saved receipt record
     if (capturedReceipt) {
-      if (txSignature) {
-        capturedReceipt.settlementTxSignature = txSignature;
-      }
+      capturedReceipt.settlementStatus = 'SETTLED';
+      capturedReceipt.settlementTxSignature = txSignature;
       if (anchorTxSignature) {
         capturedReceipt.onChainTxSignature = anchorTxSignature;
       }
@@ -302,7 +354,7 @@ export async function executeRealDevnetPayment(options?: {
     }
 
     return {
-      success: !!txSignature,
+      success: true,
       txSignature,
       explorerUrl,
       latencyMs,

@@ -5,12 +5,15 @@ export interface MandateFilter {
   operatorPubkey?: string;
   agentPubkey?: string;
   revoked?: boolean;
+  sessionId?: string;
+  activeOnly?: boolean;
 }
 
 export interface ReceiptFilter {
   agentPubkey?: string;
   merchantPubkey?: string;
   decision?: 'ALLOW' | 'DENY' | 'REVIEW';
+  sessionId?: string;
 }
 
 export interface AuditEvent {
@@ -111,6 +114,9 @@ export class MemoryStore implements ICredaverStore {
 
   async listMandates(filter?: MandateFilter): Promise<SignedMandate[]> {
     let list = Array.from(this.mandates.values());
+    if (filter?.sessionId) {
+      list = list.filter((m) => m.sessionId === filter.sessionId);
+    }
     if (filter?.operatorPubkey) {
       list = list.filter((m) => m.operatorPubkey === filter.operatorPubkey);
     }
@@ -119,6 +125,10 @@ export class MemoryStore implements ICredaverStore {
     }
     if (filter?.revoked !== undefined) {
       list = list.filter((m) => Boolean(m.revoked) === filter.revoked);
+    }
+    if (filter?.activeOnly) {
+      const now = Date.now();
+      list = list.filter((m) => !m.revoked && m.expiresAt > now);
     }
     return list.sort((a, b) => b.validFrom - a.validFrom);
   }
@@ -133,6 +143,9 @@ export class MemoryStore implements ICredaverStore {
 
   async listReceipts(filter?: ReceiptFilter): Promise<SignedReceipt[]> {
     let list = Array.from(this.receipts.values());
+    if (filter?.sessionId) {
+      list = list.filter((r) => r.sessionId === filter.sessionId);
+    }
     if (filter?.agentPubkey) {
       list = list.filter((r) => r.agentPubkey === filter.agentPubkey);
     }

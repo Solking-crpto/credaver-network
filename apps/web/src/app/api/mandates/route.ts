@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignedMandateSchema, verifySignedMandate } from '@credaver/core';
 import { getServerStore } from '../../../lib/server-state';
+import { getOrCreateSessionId, attachSessionCookie, SESSION_COOKIE_NAME } from '../../../lib/session';
 import { z } from 'zod';
 
 const MandatesQuerySchema = z.object({
   operatorPubkey: z.string().optional(),
   agentPubkey: z.string().optional(),
   revoked: z.string().optional(),
+  showAll: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -38,8 +40,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { sessionId, isNew } = getOrCreateSessionId(req);
+    const mandateWithSession = {
+      ...mandate,
+      sessionId: mandate.sessionId || sessionId,
+    };
+
     const store = getServerStore();
-    await store.saveMandate(mandate);
+    await store.saveMandate(mandateWithSession);
 
     await store.saveAuditEvent({
       eventId: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -52,19 +60,25 @@ export async function POST(req: NextRequest) {
         agentPubkey: mandate.agentPubkey,
         maxPerTx: mandate.maxPerTx,
         totalCap: mandate.totalCap,
+        sessionId,
       },
     });
 
-    return NextResponse.json(
+    const res = NextResponse.json(
       {
         success: true,
         mandate: {
-          ...mandate,
+          ...mandateWithSession,
           currentSpend: '0',
         },
       },
       { status: 201 }
     );
+
+    if (isNew) {
+      attachSessionCookie(res, sessionId);
+    }
+    return res;
   } catch (err: any) {
     return NextResponse.json(
       {
@@ -83,6 +97,7 @@ export async function GET(req: NextRequest) {
       operatorPubkey: searchParams.get('operatorPubkey') || undefined,
       agentPubkey: searchParams.get('agentPubkey') || undefined,
       revoked: searchParams.get('revoked') || undefined,
+      showAll: searchParams.get('showAll') || undefined,
     });
 
     if (!parseResult.success) {
@@ -92,18 +107,23 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { operatorPubkey, agentPubkey, revoked: revokedParam } = parseResult.data;
+    const { operatorPubkey, agentPubkey, revoked: revokedParam, showAll: showAllParam } = parseResult.data;
     const revoked = revokedParam !== undefined ? revokedParam === 'true' : undefined;
+    const showAll = showAllParam === 'true';
 
+    const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
     const store = getServerStore();
     const mandates = await store.listMandates({
       operatorPubkey,
       agentPubkey,
       revoked,
+      sessionId: sessionCookie || undefined,
+      activeOnly: !showAll && revokedParam === undefined,
     });
 
+    const limitedMandates = mandates.slice(0, 20);
     const enrichedMandates = await Promise.all(
-      mandates.map(async (m) => {
+      limitedMandates.map(async (m) => {
         const currentSpend = await store.getMandateSpend(m.mandateId);
         return {
           ...m,

@@ -32,6 +32,7 @@ export const SignedMandateSchema = MandateCoreSchema.extend({
   revoked: z.boolean().default(false),
   revokedAt: z.number().optional(),
   revokedReason: z.string().optional(),
+  sessionId: z.string().optional().nullable(),
 });
 
 export type SignedMandate = z.infer<typeof SignedMandateSchema>;
@@ -50,7 +51,8 @@ export function computeMandateHash(core: MandateCore): string {
 export function issueSignedMandate(
   core: MandateCore,
   operatorSecretKey: string | Uint8Array,
-  agentSecretKey: string | Uint8Array
+  agentSecretKey: string | Uint8Array,
+  sessionId?: string | null
 ): SignedMandate {
   const validatedCore = MandateCoreSchema.parse(core);
   const mandateHash = computeMandateHash(validatedCore);
@@ -65,6 +67,7 @@ export function issueSignedMandate(
     operatorSignature,
     agentCounterSignature,
     revoked: false,
+    sessionId: sessionId ?? null,
   };
 
   return SignedMandateSchema.parse(signedMandate);

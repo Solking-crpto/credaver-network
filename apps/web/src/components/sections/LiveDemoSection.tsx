@@ -85,6 +85,14 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
       );
     }
     if (
+      err === 'settlement_failed' ||
+      (res as any).settlementStatus === 'FAILED' ||
+      text.includes('settlement failed') ||
+      msg.includes('settlement failed')
+    ) {
+      return 'Policy allowed, settlement failed';
+    }
+    if (
       err === 'facilitator_unavailable' ||
       text.includes('facilitator') ||
       msg.includes('facilitator') ||
@@ -126,11 +134,11 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
     },
     {
       id: 'OVER_CAP',
-      name: 'Exceeds Cap',
+      name: 'Exceeds Per-Tx Limit',
       decision: 'DENY' as const,
       badge: 'SIMULATED AGENT',
       badgeVariant: 'muted' as const,
-      description: 'Agent requests amount exceeding total mandate limit. Fails closed with AMOUNT_EXCEEDS_CAP.',
+      description: 'Agent requests amount exceeding per-transaction limit ($3.00 > $2.00 max). Fails closed with AMOUNT_EXCEEDS_PER_TX.',
     },
     {
       id: 'REVOKED',
@@ -373,7 +381,9 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
                 <div className="flex items-center gap-2">
                   <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
                   <span className="text-sm font-semibold text-rose-200">
-                    Payment Settlement Not Completed
+                    {(realDevnetResult as any).settlementStatus === 'FAILED' || (realDevnetResult as any).error === 'SETTLEMENT_FAILED'
+                      ? 'Policy Allowed, Settlement Failed'
+                      : 'Payment Settlement Not Completed'}
                   </span>
                 </div>
                 <Badge variant="rose" className="font-mono text-xs self-start sm:self-auto">
@@ -524,6 +534,9 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
           <p className="text-xs text-slate-300">
             Payment exceeds operator review threshold ($1.50 USDC). Held in operator review queue for manual decision.
           </p>
+          <p className="text-[11px] text-slate-400 italic">
+            Decision recorded; no payment is made in this demo
+          </p>
           <div className="flex items-center gap-3 pt-2">
             <Button
               variant="primary"
@@ -533,7 +546,7 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
               className="min-h-[40px] px-4"
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              <span>Approve &amp; Sign Payment</span>
+              <span>Approve Decision</span>
             </Button>
             <Button
               variant="danger"
