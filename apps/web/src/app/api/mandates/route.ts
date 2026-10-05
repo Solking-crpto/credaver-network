@@ -58,7 +58,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        mandate,
+        mandate: {
+          ...mandate,
+          currentSpend: '0',
+        },
       },
       { status: 201 }
     );
@@ -99,9 +102,19 @@ export async function GET(req: NextRequest) {
       revoked,
     });
 
+    const enrichedMandates = await Promise.all(
+      mandates.map(async (m) => {
+        const currentSpend = await store.getMandateSpend(m.mandateId);
+        return {
+          ...m,
+          currentSpend: currentSpend.toString(),
+        };
+      })
+    );
+
     return NextResponse.json({
-      mandates,
-      count: mandates.length,
+      mandates: enrichedMandates,
+      count: enrichedMandates.length,
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -288,11 +288,16 @@ export default function HomePage() {
       const data = await res.json();
       if (res.ok) {
         setScenarioResults((prev) => ({ ...prev, [scenario]: data }));
-        setActiveReceipt(data.receipt);
+        if (scenario !== 'REAL_DEVNET') {
+          setActiveReceipt(data.receipt);
+        } else {
+          setActiveReceipt(null);
+        }
         if (data.decision === 'REVIEW') {
           setPendingReviewReceipt(data.receipt);
         }
       } else {
+        const errorMsg = data.message || data.error || 'Scenario request failed';
         setScenarioResults((prev) => ({
           ...prev,
           [scenario]: {
@@ -300,15 +305,36 @@ export default function HomePage() {
             statusCode: res.status,
             decision: 'DENY',
             latencyMs: 0,
-            details: data.message || data.error || 'Scenario request failed',
+            details: errorMsg,
+            message: data.message,
+            error: data.error,
             explorerUrl: data.explorerUrl,
           },
         }));
+        if (scenario === 'REAL_DEVNET') {
+          setActiveReceipt(null);
+        }
       }
       fetchMandates();
       fetchReceipts();
     } catch (err: any) {
       console.error('Scenario error:', err);
+      const errorMsg = err.message || 'Scenario network request failed';
+      setScenarioResults((prev) => ({
+        ...prev,
+        [scenario]: {
+          scenario,
+          statusCode: 500,
+          decision: 'DENY',
+          latencyMs: 0,
+          details: errorMsg,
+          message: errorMsg,
+          error: 'NETWORK_ERROR',
+        },
+      }));
+      if (scenario === 'REAL_DEVNET') {
+        setActiveReceipt(null);
+      }
     } finally {
       setRunningScenario(null);
     }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -54,6 +54,59 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
   onRunAllScenarios,
   onReviewAction,
 }) => {
+  const featuredCardRef = useRef<HTMLDivElement>(null);
+  const hasTriggeredScroll = useRef(false);
+
+  const realDevnetResult = scenarioResults['REAL_DEVNET'];
+  const isRealRunning = runningScenario === 'REAL_DEVNET';
+  const hasRealResult = Boolean(realDevnetResult);
+  const isRealSuccess = realDevnetResult?.statusCode === 200;
+  const isRealError = hasRealResult && !isRealSuccess;
+
+  useEffect(() => {
+    if (isRealRunning) {
+      hasTriggeredScroll.current = true;
+      featuredCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else if (hasTriggeredScroll.current && realDevnetResult) {
+      featuredCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isRealRunning, realDevnetResult]);
+
+  const getPlainLanguageErrorMessage = (res: ScenarioResult): string => {
+    const text = (res.details || '').toLowerCase();
+    const msg = ((res as any).message || '').toLowerCase();
+    const err = ((res as any).error || '').toLowerCase();
+
+    if (err === 'rate_limit_exceeded' || res.statusCode === 429) {
+      return (
+        (res as any).message ||
+        res.details ||
+        'Daily limit for live devnet payments reached. Please try again tomorrow.'
+      );
+    }
+    if (
+      err === 'facilitator_unavailable' ||
+      text.includes('facilitator') ||
+      msg.includes('facilitator') ||
+      text.includes('econnrefused') ||
+      text.includes('unreachable') ||
+      text.includes('fetch failed')
+    ) {
+      return 'The public facilitator is unavailable';
+    }
+    if (
+      err === 'insufficient_devnet_funds' ||
+      text.includes('insufficient') ||
+      msg.includes('insufficient') ||
+      text.includes('out of') ||
+      text.includes('balance') ||
+      text.includes('0x1')
+    ) {
+      return 'The demo wallet is out of devnet funds';
+    }
+    return (res as any).message || res.details || 'Live devnet payment settlement failed. Please try again.';
+  };
+
   const formatAmountUSDC = (baseUnits: string) => {
     const num = Number(baseUnits) / 1e6;
     return `$${num.toFixed(2)} USDC`;
@@ -153,93 +206,250 @@ export const LiveDemoSection: React.FC<LiveDemoSectionProps> = ({
       </div>
 
       {/* FEATURED CARD: Real Devnet Settlement (Placed First & Visually Featured) */}
-      <Card
-        className={`p-6 border-2 transition-all ${
-          scenarioResults['REAL_DEVNET']
-            ? scenarioResults['REAL_DEVNET'].statusCode === 200
+      <div ref={featuredCardRef} className="scroll-mt-8">
+        <Card
+          className={`p-6 border-2 transition-all ${
+            isRealRunning
+              ? 'border-emerald-500/60 bg-emerald-950/20 shadow-glow'
+              : isRealSuccess
               ? 'border-emerald-500/70 bg-emerald-950/20'
-              : 'border-amber-500/70 bg-amber-950/20'
-            : 'border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/60'
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider block">
-                Featured Live Execution
-              </span>
-              <h3 className="text-base sm:text-lg font-bold text-white">
-                Real Devnet Settlement (x402 Protocol)
-              </h3>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="green" className="font-mono text-xs font-bold px-2.5 py-0.5">
-              REAL (devnet)
-            </Badge>
-            {scenarioResults['REAL_DEVNET'] && (
-              <StatusChip status={scenarioResults['REAL_DEVNET'].decision} />
-            )}
-          </div>
-        </div>
-
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl">
-          Real devnet payment using server-funded devnet keys. The agent holds only its identity key, requesting 1.00 USDC telemetry from the demo merchant via the CredaVer Constrained Signer and the public facilitator (<code className="text-cyan-400 font-mono">x402.org</code>).
-        </p>
-
-        <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between pt-4 border-t border-emerald-500/20 gap-4">
-          <div className="text-xs font-mono text-slate-400">
-            {runningScenario === 'REAL_DEVNET' ? (
-              <span className="text-emerald-400 animate-pulse flex items-center gap-2">
-                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                Executing live settlement via facilitator (~5–10s)...
-              </span>
-            ) : scenarioResults['REAL_DEVNET'] ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-slate-300">
-                  Latency: {scenarioResults['REAL_DEVNET'].latencyMs}ms
-                </span>
-                {scenarioResults['REAL_DEVNET'].txSignature && (
-                  <Link
-                    href={scenarioResults['REAL_DEVNET'].explorerUrl || `https://explorer.solana.com/tx/${scenarioResults['REAL_DEVNET'].txSignature}?cluster=devnet`}
-                    target="_blank"
-                    className="text-emerald-400 underline font-bold inline-flex items-center gap-1 hover:text-emerald-300"
-                  >
-                    Solana Explorer TX <ExternalLink className="w-3 h-3" />
-                  </Link>
-                )}
-                {scenarioResults['REAL_DEVNET'].anchorTxSignature && (
-                  <Link
-                    href={scenarioResults['REAL_DEVNET'].anchorExplorerUrl || `https://explorer.solana.com/tx/${scenarioResults['REAL_DEVNET'].anchorTxSignature}?cluster=devnet`}
-                    target="_blank"
-                    className="text-cyan-400 underline font-mono text-[11px] inline-flex items-center gap-1 hover:text-cyan-300"
-                  >
-                    ⚓ Anchor Memo: {scenarioResults['REAL_DEVNET'].anchorTxSignature.slice(0, 8)}... <ExternalLink className="w-2.5 h-2.5" />
-                  </Link>
-                )}
+              : isRealError
+              ? 'border-rose-500/60 bg-rose-950/20'
+              : 'border-emerald-500/40 bg-emerald-950/10 hover:border-emerald-500/60'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <Zap className="w-4 h-4" />
               </div>
-            ) : (
-              <span className="text-emerald-400/80">
-                Live Solana Devnet Settlement + SPL Memo Anchor
-              </span>
-            )}
+              <div>
+                <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider block">
+                  Featured Live Execution
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  Real Devnet Settlement (x402 Protocol)
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="green" className="font-mono text-xs font-bold px-2.5 py-0.5">
+                REAL (devnet)
+              </Badge>
+              {realDevnetResult && (
+                <StatusChip status={realDevnetResult.decision} />
+              )}
+            </div>
           </div>
 
-          <Button
-            variant="primary"
-            onClick={() => onRunScenario('REAL_DEVNET')}
-            isLoading={runningScenario === 'REAL_DEVNET'}
-            className="self-start sm:self-auto min-h-[44px] px-5"
-          >
-            <span>Execute Live Devnet Payment</span>
-            <ChevronRight className="w-4 h-4 ml-1" />
-          </Button>
-        </div>
-      </Card>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-3xl">
+            Real devnet payment using server-funded devnet keys. The agent holds only its identity key, requesting 1.00 USDC telemetry from the demo merchant via the CredaVer Constrained Signer and the public facilitator (<code className="text-cyan-400 font-mono">x402.org</code>).
+          </p>
+
+          {/* LOADING STATE */}
+          {isRealRunning && (
+            <div className="mt-5 p-4 rounded-xl bg-surface/90 border border-emerald-500/40 flex items-start sm:items-center gap-3.5 animate-pulse">
+              <RotateCcw className="w-5 h-5 text-emerald-400 animate-spin shrink-0 mt-0.5 sm:mt-0" />
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-white">
+                  Settling on Solana devnet, usually 5 to 15 seconds
+                </div>
+                <div className="text-xs text-muted font-mono">
+                  CredaVer Constrained Signer evaluating proof and broadcasting x402 payment to public facilitator...
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUCCESS RESULT INSIDE FEATURED CARD */}
+          {!isRealRunning && isRealSuccess && (() => {
+            const receiptId = realDevnetResult.receipt?.receiptId || realDevnetResult.mandateId || 'UNKNOWN';
+            const reasonCode =
+              realDevnetResult.reasonCodes?.[0] ||
+              realDevnetResult.receipt?.reasonCodes?.[0] ||
+              'POLICY_PASSED_ALL_GATES';
+            const explorerUrl =
+              realDevnetResult.explorerUrl ||
+              (realDevnetResult.txSignature
+                ? `https://explorer.solana.com/tx/${realDevnetResult.txSignature}?cluster=devnet`
+                : undefined);
+            const anchorExplorerUrl =
+              realDevnetResult.anchorExplorerUrl ||
+              (realDevnetResult.anchorTxSignature
+                ? `https://explorer.solana.com/tx/${realDevnetResult.anchorTxSignature}?cluster=devnet`
+                : undefined);
+
+            return (
+              <div className="mt-5 p-5 rounded-xl bg-surface-card/90 border border-emerald-500/50 space-y-4">
+                {/* Decision Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <StatusChip status={realDevnetResult.decision} />
+                    <Badge variant="cyan" className="font-mono text-xs">
+                      {reasonCode}
+                    </Badge>
+                  </div>
+                  <div className="text-xs font-mono text-slate-300 flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-muted" />
+                    <span>Total Latency:</span>
+                    <strong className="text-white font-bold">{realDevnetResult.latencyMs}ms</strong>
+                  </div>
+                </div>
+
+                {/* Details List */}
+                <div className="space-y-2.5 text-xs font-mono">
+                  {/* Receipt ID */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 p-2.5 rounded-lg bg-surface border border-border/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted">Receipt ID:</span>
+                      <code className="text-white font-bold">{receiptId}</code>
+                    </div>
+                    <Link
+                      href={`/verify?receiptId=${receiptId}`}
+                      className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-4 flex items-center gap-1 self-start sm:self-auto"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Verify this receipt</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+
+                  {/* Settlement TX */}
+                  {realDevnetResult.txSignature && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 p-2.5 rounded-lg bg-surface border border-border/40">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted">Settlement TX:</span>
+                        <code className="text-emerald-300">{truncate(realDevnetResult.txSignature, 12)}</code>
+                      </div>
+                      {explorerUrl && (
+                        <a
+                          href={explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-4 flex items-center gap-1 self-start sm:self-auto"
+                        >
+                          <span>View on Solana Explorer</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* On-Chain Anchor */}
+                  {realDevnetResult.anchorTxSignature ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 p-2.5 rounded-lg bg-surface border border-border/40">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted">On-Chain Anchor:</span>
+                        <code className="text-cyan-300">{truncate(realDevnetResult.anchorTxSignature, 12)}</code>
+                      </div>
+                      {anchorExplorerUrl && (
+                        <a
+                          href={anchorExplorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-cyan-400 hover:text-cyan-300 font-semibold underline underline-offset-4 flex items-center gap-1 self-start sm:self-auto"
+                        >
+                          <span>Anchor Memo on Explorer</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  ) : realDevnetResult.anchorStatus && realDevnetResult.anchorStatus.includes('failed') ? (
+                    <div className="p-2.5 rounded-lg bg-surface border border-amber-500/30 text-amber-300 flex items-center justify-between">
+                      <span>On-Chain Anchor:</span>
+                      <span className="font-semibold">anchor failed</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ERROR STATE INSIDE FEATURED CARD */}
+          {!isRealRunning && isRealError && (
+            <div className="mt-5 p-5 rounded-xl bg-rose-950/25 border border-rose-500/50 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-500/30 pb-3">
+                <div className="flex items-center gap-2">
+                  <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                  <span className="text-sm font-semibold text-rose-200">
+                    Payment Settlement Not Completed
+                  </span>
+                </div>
+                <Badge variant="rose" className="font-mono text-xs self-start sm:self-auto">
+                  HTTP {realDevnetResult.statusCode || 500}
+                </Badge>
+              </div>
+
+              <div className="p-3 bg-surface/80 rounded-lg border border-border/50 text-xs font-mono text-rose-300">
+                <p className="font-semibold text-white mb-1">
+                  {getPlainLanguageErrorMessage(realDevnetResult)}
+                </p>
+                {realDevnetResult.details &&
+                  realDevnetResult.details !== getPlainLanguageErrorMessage(realDevnetResult) && (
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      {realDevnetResult.details}
+                    </p>
+                  )}
+              </div>
+
+              <div className="flex items-center justify-end pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRunScenario('REAL_DEVNET')}
+                  disabled={isRealRunning}
+                  className="hover:border-rose-400 hover:text-rose-300 min-h-[38px] px-4 text-xs font-mono"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Retry</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Action / Trigger Row */}
+          <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between pt-4 border-t border-emerald-500/20 gap-4">
+            <div className="text-xs font-mono text-slate-400">
+              {isRealRunning ? (
+                <span className="text-emerald-400 animate-pulse flex items-center gap-2">
+                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  Executing live settlement via facilitator (~5–15s)...
+                </span>
+              ) : isRealSuccess ? (
+                <span className="text-emerald-400">
+                  Payment settled and spend recorded on devnet.
+                </span>
+              ) : isRealError ? (
+                <span className="text-rose-400">
+                  Payment failed. You can retry with the button below.
+                </span>
+              ) : (
+                <span className="text-emerald-400/80">
+                  Live Solana Devnet Settlement + SPL Memo Anchor
+                </span>
+              )}
+            </div>
+
+            <Button
+              variant={isRealSuccess ? 'outline' : 'primary'}
+              onClick={() => onRunScenario('REAL_DEVNET')}
+              disabled={isRealRunning}
+              isLoading={isRealRunning}
+              className="self-start sm:self-auto min-h-[44px] px-5"
+            >
+              <span>
+                {isRealRunning
+                  ? 'Settling on Solana...'
+                  : isRealSuccess
+                  ? 'Run Again'
+                  : 'Execute Live Devnet Payment'}
+              </span>
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </Card>
+      </div>
 
       {/* Grid of the 6 Policy Scenarios */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

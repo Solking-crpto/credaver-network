@@ -68,7 +68,17 @@ describe('apps/web: Mandates & Receipts REST API Endpoints', () => {
     const listRes = await listMandatesRoute(listReq);
     expect(listRes.status).toBe(200);
     const listData = await listRes.json();
-    expect(listData.mandates.some((m: any) => m.mandateId === 'mandate-rest-1')).toBe(true);
+    const foundMandate = listData.mandates.find((m: any) => m.mandateId === 'mandate-rest-1');
+    expect(foundMandate).toBeDefined();
+    expect(foundMandate.currentSpend).toBe('0');
+
+    // Record 1.00 USDC spend against mandate and confirm GET /api/mandates reflects it
+    const store = getServerStore();
+    await store.recordMandateSpend('mandate-rest-1', 1000000n);
+    const listResAfterSpend = await listMandatesRoute(listReq);
+    const listDataAfterSpend = await listResAfterSpend.json();
+    const updatedMandate = listDataAfterSpend.mandates.find((m: any) => m.mandateId === 'mandate-rest-1');
+    expect(updatedMandate.currentSpend).toBe('1000000');
   });
 
   it('2. GET /api/mandates/[id] returns mandate details; returns 404 for unknown', async () => {

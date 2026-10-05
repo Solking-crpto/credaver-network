@@ -405,7 +405,9 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
                 {/* Spend Progress Bar */}
                 <div className="space-y-1.5 pt-1">
                   <div className="flex justify-between text-xs font-mono text-slate-400">
-                    <span>Cumulative Spend</span>
+                    <span>
+                      Cumulative Spend ({formatAmountUSDC(spend.toString())} of {formatAmountUSDC(m.totalCap)})
+                    </span>
                     <span className="text-white font-bold">{pct}%</span>
                   </div>
                   <div className="w-full h-2 bg-surface rounded-full overflow-hidden border border-border/60">
