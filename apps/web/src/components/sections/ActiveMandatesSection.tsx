@@ -103,7 +103,7 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
         <div className="flex items-center gap-3">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
             <Lock className="w-6 h-6 text-cyan-400" />
-            Active Operator Mandates
+            Operator Mandates
           </h2>
           <Badge variant="cyan" className="font-mono text-xs">
             {mandates.length}
@@ -374,13 +374,7 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
               <Card key={m.mandateId} className="p-5 border-border/80 bg-surface-card/75 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-white">{m.mandateId}</span>
-                  {m.revoked ? (
-                    <Badge variant="rose">REVOKED</Badge>
-                  ) : isExpired ? (
-                    <Badge variant="amber">EXPIRED</Badge>
-                  ) : (
-                    <Badge variant="green">ACTIVE</Badge>
-                  )}
+                  <StatusChip status={m.revoked ? 'REVOKED' : isExpired ? 'EXPIRED' : 'ACTIVE'} />
                 </div>
 
                 <div className="space-y-1.5 text-xs font-mono text-muted">
@@ -425,7 +419,7 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
                     {isExpired ? 'Expired' : `Expires in ${Math.round((m.expiresAt - Date.now()) / 60000)}m`}
                   </span>
 
-                  {!m.revoked && (
+                  {!m.revoked && !isExpired && (
                     <div className="flex items-center gap-2">
                       {isConfirming && (
                         <button

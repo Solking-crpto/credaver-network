@@ -63,34 +63,78 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
                   <th className="p-3.5">Amount</th>
                   <th className="p-3.5">Reason Code</th>
                   <th className="p-3.5">Timestamp</th>
+                  <th className="p-3.5">Explorer</th>
                   <th className="p-3.5 text-right">Verification</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {receipts.slice(0, 15).map((r) => (
-                  <tr key={r.receiptId} className="hover:bg-surface/50 transition-colors">
-                    <td className="p-3.5">
-                      <StatusChip status={r.decision} />
-                    </td>
-                    <td className="p-3.5 font-semibold text-white">{r.receiptId}</td>
-                    <td className="p-3.5 text-slate-200">{formatAmountUSDC(r.amount)}</td>
-                    <td className="p-3.5 text-slate-400 max-w-[200px] truncate">
-                      {r.reasonCodes?.[0] || 'NONE'}
-                    </td>
-                    <td className="p-3.5 text-slate-400">
-                      {new Date(r.issuedAt).toLocaleTimeString()}
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <Link
-                        href={`/verify?receiptId=${r.receiptId}`}
-                        className="text-cyan-400 hover:text-cyan-300 underline underline-offset-4 inline-flex items-center gap-1 font-semibold"
-                      >
-                        <span>Verify</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {receipts.slice(0, 15).map((r) => {
+                  const settlementTx = r.settlementTxSignature || r.paymentTxSignature || r.txSignature;
+                  const anchorTx = r.onChainTxSignature || r.anchorTxSignature;
+
+                  return (
+                    <tr key={r.receiptId} className="hover:bg-surface/50 transition-colors">
+                      <td className="p-3.5">
+                        <StatusChip status={r.decision} />
+                      </td>
+                      <td className="p-3.5 font-semibold text-white">{r.receiptId}</td>
+                      <td className="p-3.5 text-slate-200">{formatAmountUSDC(r.amount)}</td>
+                      <td className="p-3.5 text-slate-400 max-w-[200px] truncate">
+                        {r.reasonCodes?.[0] || 'NONE'}
+                      </td>
+                      <td className="p-3.5 text-slate-400">
+                        {new Date(r.issuedAt).toLocaleTimeString()}
+                      </td>
+                      <td className="p-3.5">
+                        {settlementTx ? (
+                          <div className="flex flex-col gap-0.5">
+                            <a
+                              href={`https://explorer.solana.com/tx/${settlementTx}?cluster=devnet`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1 font-semibold text-xs"
+                            >
+                              <span>Explorer</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            {anchorTx && anchorTx !== settlementTx && (
+                              <a
+                                href={`https://explorer.solana.com/tx/${anchorTx}?cluster=devnet`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1 text-[10px]"
+                              >
+                                <span>Anchor Memo</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        ) : anchorTx ? (
+                          <a
+                            href={`https://explorer.solana.com/tx/${anchorTx}?cluster=devnet`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1 font-semibold text-xs"
+                          >
+                            <span>Anchor Memo</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-muted text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <Link
+                          href={`/verify?receiptId=${r.receiptId}`}
+                          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-4 inline-flex items-center gap-1 font-semibold"
+                        >
+                          <span>Verify</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -284,11 +284,21 @@ export async function executeRealDevnetPayment(options?: {
         anchorExplorerUrl = `https://explorer.solana.com/tx/${anchorResult.txSignature}?cluster=devnet`;
         anchorStatus = 'anchored';
         capturedReceipt.onChainTxSignature = anchorResult.txSignature;
-        await store.saveReceipt(capturedReceipt);
       } catch (anchorErr: any) {
         console.warn('[CredaVer] Devnet receipt anchoring failed:', anchorErr.message);
         anchorStatus = `anchor failed: ${anchorErr.message}`;
       }
+    }
+
+    // Persist settlement transaction signature & anchor memo signature on saved receipt record
+    if (capturedReceipt) {
+      if (txSignature) {
+        capturedReceipt.settlementTxSignature = txSignature;
+      }
+      if (anchorTxSignature) {
+        capturedReceipt.onChainTxSignature = anchorTxSignature;
+      }
+      await store.saveReceipt(capturedReceipt);
     }
 
     return {
