@@ -31,6 +31,8 @@ export interface ScenarioResult {
   anchorTxSignature?: string;
   anchorExplorerUrl?: string;
   anchorStatus?: string;
+  error?: string;
+  message?: string;
 }
 
 interface LiveDemoSectionProps {

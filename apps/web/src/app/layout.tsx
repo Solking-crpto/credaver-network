@@ -4,6 +4,9 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import '../styles/globals.css';
 import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
+import { WalletProvider } from '../context/WalletContext';
+import { AppProvider } from '../context/AppContext';
+import { Analytics } from '@vercel/analytics/next';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -39,7 +42,10 @@ function getMetadataBase(): URL {
 
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
-  title: 'CredaVer Network | Agent Mandates & Authorization Gateway',
+  title: {
+    default: 'CredaVer Network | Agent Mandates & Authorization Gateway',
+    template: '%s | CredaVer Network',
+  },
   description:
     'Cryptographic authorization layer between AI agents and Solana wallets. Scoped, revocable mandates with verifiable receipts for x402 payments.',
   icons: {
@@ -87,11 +93,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${fontSans.variable} ${fontMono.variable}`}>
       <body className="bg-credav-bg text-slate-100 antialiased font-sans selection:bg-credav-cyan selection:text-credav-bg min-h-screen flex flex-col">
-        <Navigation />
-        <main className="flex-1 max-w-content w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-          {children}
-        </main>
-        <Footer />
+        <WalletProvider>
+          <AppProvider>
+            <Navigation />
+            <main className="flex-1 max-w-content w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+              {children}
+            </main>
+            <Footer />
+            <Analytics />
+          </AppProvider>
+        </WalletProvider>
       </body>
     </html>
   );

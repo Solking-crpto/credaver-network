@@ -1,10 +1,12 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { StatusChip } from '../ui/StatusChip';
-import { FileCheck2, RotateCcw, ExternalLink } from 'lucide-react';
+import { FileCheck2, RotateCcw, ExternalLink, ArrowRight, Filter } from 'lucide-react';
 
 interface SignedReceiptsSectionProps {
   receipts: any[];
@@ -17,40 +19,74 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
   receiptsLoading,
   onRefresh,
 }) => {
+  const [filterDecision, setFilterDecision] = useState<'ALL' | 'ALLOW' | 'REVIEW' | 'DENY'>('ALL');
+
   const formatAmountUSDC = (baseUnits: string) => {
     const num = Number(baseUnits) / 1e6;
     return `$${num.toFixed(2)} USDC`;
   };
 
+  const filteredReceipts = receipts.filter((r) => {
+    if (filterDecision === 'ALL') return true;
+    return r.decision === filterDecision;
+  });
+
   return (
-    <section id="receipts" className="py-12 border-t border-border/50 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <section id="receipts" className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
             <FileCheck2 className="w-6 h-6 text-cyan-400" />
             Signed Decision Receipts
           </h2>
           <Badge variant="cyan" className="font-mono text-xs">
-            {receipts.length}
+            {filteredReceipts.length}
+            {filterDecision !== 'ALL' && ` of ${receipts.length}`}
           </Badge>
         </div>
 
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onRefresh}
-          isLoading={receiptsLoading}
-          className="self-start sm:self-auto min-h-[40px] px-3 text-xs"
-        >
-          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-          <span>Refresh</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Decision Filters */}
+          <div className="inline-flex rounded-lg p-0.5 bg-surface border border-border/80 text-xs font-mono">
+            {(['ALL', 'ALLOW', 'REVIEW', 'DENY'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setFilterDecision(filter)}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  filterDecision === filter
+                    ? 'bg-surface-card text-white font-bold border border-border shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRefresh}
+            isLoading={receiptsLoading}
+            className="min-h-[36px] px-3 text-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+            <span>Refresh</span>
+          </Button>
+        </div>
       </div>
 
-      {receipts.length === 0 ? (
+      {filteredReceipts.length === 0 ? (
         <Card className="text-center py-12 text-muted font-mono text-xs border-dashed border-border/80">
-          <p>No decision receipts recorded yet.</p>
-          <p className="mt-1 text-slate-500">Run a scenario in the Live Demo to evaluate policy and generate verifiable receipts.</p>
+          <p>
+            {receipts.length === 0
+              ? 'No decision receipts recorded yet.'
+              : `No receipts found matching filter "${filterDecision}".`}
+          </p>
+          <p className="mt-1 text-slate-500">
+            Run a scenario in the Live Demo to evaluate policy and generate verifiable receipts.
+          </p>
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden border-border/80 bg-surface-card/80">
@@ -64,11 +100,11 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
                   <th className="p-3.5">Reason Code</th>
                   <th className="p-3.5">Timestamp</th>
                   <th className="p-3.5">Explorer</th>
-                  <th className="p-3.5 text-right">Verification</th>
+                  <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {receipts.slice(0, 15).map((r) => {
+                {filteredReceipts.slice(0, 20).map((r) => {
                   const settlementTx = r.settlementTxSignature || r.paymentTxSignature || r.txSignature;
                   const anchorTx = r.onChainTxSignature || r.anchorTxSignature;
 
@@ -77,7 +113,14 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
                       <td className="p-3.5">
                         <StatusChip status={r.decision} />
                       </td>
-                      <td className="p-3.5 font-semibold text-white">{r.receiptId}</td>
+                      <td className="p-3.5 font-semibold text-white">
+                        <Link
+                          href={`/receipts/${encodeURIComponent(r.receiptId)}`}
+                          className="hover:text-cyan-400 underline underline-offset-4"
+                        >
+                          {r.receiptId}
+                        </Link>
+                      </td>
                       <td className="p-3.5 text-slate-200">{formatAmountUSDC(r.amount)}</td>
                       <td className="p-3.5 text-slate-400 max-w-[200px] truncate">
                         {r.reasonCodes?.[0] || 'NONE'}
@@ -94,7 +137,7 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
                               rel="noopener noreferrer"
                               className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1 font-semibold text-xs"
                             >
-                              <span>Explorer</span>
+                              <span>Settlement</span>
                               <ExternalLink className="w-3 h-3" />
                             </a>
                             {anchorTx && anchorTx !== settlementTx && (
@@ -123,13 +166,19 @@ export const SignedReceiptsSection: React.FC<SignedReceiptsSectionProps> = ({
                           <span className="text-muted text-[11px]">—</span>
                         )}
                       </td>
-                      <td className="p-3.5 text-right">
+                      <td className="p-3.5 text-right space-x-2">
                         <Link
-                          href={`/verify?receiptId=${r.receiptId}`}
-                          className="text-cyan-400 hover:text-cyan-300 underline underline-offset-4 inline-flex items-center gap-1 font-semibold"
+                          href={`/receipts/${encodeURIComponent(r.receiptId)}`}
+                          className="text-slate-300 hover:text-white px-2 py-1 rounded bg-surface border border-border text-[11px] inline-flex items-center gap-1"
+                        >
+                          <span>Details</span>
+                        </Link>
+                        <Link
+                          href={`/verify?receiptId=${encodeURIComponent(r.receiptId)}`}
+                          className="text-cyan-400 hover:text-cyan-300 px-2 py-1 rounded bg-surface border border-cyan-500/30 text-[11px] inline-flex items-center gap-1 font-semibold"
                         >
                           <span>Verify</span>
-                          <ExternalLink className="w-3 h-3" />
+                          <ExternalLink className="w-2.5 h-2.5" />
                         </Link>
                       </td>
                     </tr>

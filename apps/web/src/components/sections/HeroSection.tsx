@@ -34,12 +34,12 @@ export const HeroSection: React.FC = () => {
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-2">
-            <a href="#live-demo">
+            <Link href="/demo">
               <Button variant="primary" size="lg" className="shadow-glow min-h-[48px] px-6">
                 <Play className="w-4 h-4 mr-2" />
-                <span>Run the 6 scenarios</span>
+                <span>Try Live Demo</span>
               </Button>
-            </a>
+            </Link>
 
             <Link href="/verify">
               <Button variant="outline" size="lg" className="min-h-[48px] px-6">

@@ -118,7 +118,7 @@ export const EarlyAccessSection: React.FC = () => {
             </Button>
 
             <p className="text-[11px] text-center text-slate-500 leading-normal pt-1">
-              Privacy note: We only use your email to notify you when a hosted version is ready. No marketing spam, no third-party data sharing.
+              Privacy note: We only use your email to notify you when a hosted version is ready. No marketing spam, no third-party data sharing. Anonymous, cookieless page-view analytics are powered by Vercel Analytics.
             </p>
           </form>
         )}

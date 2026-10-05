@@ -1,473 +1,229 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { usePhantomWallet } from '../hooks/usePhantomWallet';
-import { createInMemoryAgent, InMemoryAgent } from '../lib/browser-agent';
-import { getBase58Decoder } from '@solana/kit';
-
+import React from 'react';
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { HeroSection } from '../components/sections/HeroSection';
-import { HowItWorksSection } from '../components/sections/HowItWorksSection';
-import { LiveDemoSection, ScenarioResult } from '../components/sections/LiveDemoSection';
-import { OnChainProofSection } from '../components/sections/OnChainProofSection';
-import { ActiveMandatesSection } from '../components/sections/ActiveMandatesSection';
-import { SignedReceiptsSection } from '../components/sections/SignedReceiptsSection';
-import { CoreConceptsSection } from '../components/sections/CoreConceptsSection';
 import { EarlyAccessSection } from '../components/sections/EarlyAccessSection';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import {
+  Shield,
+  FileCheck2,
+  Cpu,
+  ArrowRight,
+  ExternalLink,
+  Play,
+  Key,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+} from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Home',
+  description:
+    'CredaVer Network is the cryptographic authorization layer between AI agents and Solana wallets. Scoped, revocable mandates with verifiable receipts for x402 payments.',
+};
+
+const REAL_S5_EXPLORER_URL =
+  'https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet';
 
 export default function HomePage() {
-  // Test Runner State
-  const [runningScenario, setRunningScenario] = useState<string | null>(null);
-  const [scenarioResults, setScenarioResults] = useState<Record<string, ScenarioResult>>({});
-  const [activeReceipt, setActiveReceipt] = useState<any | null>(null);
-  const [pendingReviewReceipt, setPendingReviewReceipt] = useState<any | null>(null);
-  const [reviewActionLoading, setReviewActionLoading] = useState(false);
-
-  // Mandates State
-  const [mandates, setMandates] = useState<any[]>([]);
-  const [mandatesLoading, setMandatesLoading] = useState(false);
-  const [showAllMandates, setShowAllMandates] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  // Receipts State
-  const [receipts, setReceipts] = useState<any[]>([]);
-  const [receiptsLoading, setReceiptsLoading] = useState(false);
-
-  // Phantom Wallet & In-Memory Agent State
-  const {
-    publicKey: phantomPubkey,
-    isConnected: isPhantomConnected,
-    connect: connectPhantom,
-    signMessage: signPhantomMessage,
-    openModal,
-  } = usePhantomWallet();
-
-  const [showIssuePanel, setShowIssuePanel] = useState(false);
-  const [inMemoryAgent, setInMemoryAgent] = useState<InMemoryAgent | null>(null);
-  const [issueLoading, setIssueLoading] = useState(false);
-  const [issueStatusText, setIssueStatusText] = useState<string | null>(null);
-  const [issueError, setIssueError] = useState<string | null>(null);
-  const [userIssuedMandate, setUserIssuedMandate] = useState<any | null>(null);
-
-  // Form Fields for Issue Mandate
-  const [mandateMaxPerTx, setMandateMaxPerTx] = useState('2.00'); // USDC
-  const [mandateTotalCap, setMandateTotalCap] = useState('5.00'); // USDC
-  const [mandateReviewThreshold, setMandateReviewThreshold] = useState('1.50'); // USDC
-
-  // User-Issued Mandate Interactive Testing State
-  const [userTestRunning, setUserTestRunning] = useState<string | null>(null);
-  const [userTestResult, setUserTestResult] = useState<any | null>(null);
-
-  // Load Initial Data
-  useEffect(() => {
-    fetchMandates(false);
-    fetchReceipts();
-  }, []);
-
-  const fetchMandates = async (showAll?: boolean) => {
-    setMandatesLoading(true);
-    try {
-      const isAll = typeof showAll === 'boolean' ? showAll : showAllMandates;
-      const url = isAll ? '/api/mandates?showAll=true' : '/api/mandates';
-      const res = await fetch(url);
-      const data = await res.json();
-      if (res.ok && data.mandates) {
-        setMandates(data.mandates);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setMandatesLoading(false);
-    }
-  };
-
-  const handleToggleShowAll = () => {
-    const next = !showAllMandates;
-    setShowAllMandates(next);
-    fetchMandates(next);
-  };
-
-  const fetchReceipts = async () => {
-    setReceiptsLoading(true);
-    try {
-      const res = await fetch('/api/receipts');
-      const data = await res.json();
-      if (res.ok && data.receipts) {
-        setReceipts(data.receipts);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setReceiptsLoading(false);
-    }
-  };
-
-  const handleOpenIssuePanel = async () => {
-    setShowIssuePanel((prev) => !prev);
-    setIssueError(null);
-    if (!inMemoryAgent) {
-      try {
-        const agent = await createInMemoryAgent();
-        setInMemoryAgent(agent);
-      } catch (err: any) {
-        setIssueError(`Failed to generate in-memory agent: ${err.message}`);
-      }
-    }
-  };
-
-  const handleSignAndIssueMandate = async () => {
-    if (!phantomPubkey) {
-      openModal();
-      return;
-    }
-
-    setIssueLoading(true);
-    setIssueError(null);
-    setIssueStatusText('Initializing agent in-memory key...');
-
-    try {
-      let agent = inMemoryAgent;
-      if (!agent) {
-        agent = await createInMemoryAgent();
-        setInMemoryAgent(agent);
-      }
-
-      setIssueStatusText('Preparing canonical RFC 8785 mandate core...');
-      const maxPerTxUnits = String(Math.round(parseFloat(mandateMaxPerTx) * 1e6));
-      const totalCapUnits = String(Math.round(parseFloat(mandateTotalCap) * 1e6));
-      const reviewUnits = mandateReviewThreshold
-        ? String(Math.round(parseFloat(mandateReviewThreshold) * 1e6))
-        : undefined;
-
-      const prepRes = await fetch('/api/mandates/prepare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          operatorPubkey: phantomPubkey,
-          agentPubkey: agent.agentPubkey,
-          maxPerTx: maxPerTxUnits,
-          totalCap: totalCapUnits,
-          reviewThreshold: reviewUnits,
-          expiresInMinutes: 120,
-        }),
-      });
-
-      if (!prepRes.ok) {
-        const prepErr = await prepRes.json();
-        throw new Error(prepErr.message || 'Failed to prepare mandate core');
-      }
-
-      const { core, mandateHash, signingMessage } = await prepRes.json();
-
-      setIssueStatusText('Please sign the readable message in your Phantom wallet...');
-      const msgBytes = new TextEncoder().encode(signingMessage);
-      const phantomSigResult = await signPhantomMessage(msgBytes);
-
-      const decoder = getBase58Decoder();
-      const operatorSignature = decoder.decode(phantomSigResult.signature);
-
-      setIssueStatusText('Co-signing with in-memory agent key...');
-      const agentCounterSignature = await agent.signBytes(msgBytes);
-
-      setIssueStatusText('Submitting and verifying mutual Ed25519 signatures...');
-      const signedMandatePayload = {
-        ...core,
-        mandateHash,
-        operatorSignature,
-        agentCounterSignature,
-        revoked: false,
-      };
-
-      const submitRes = await fetch('/api/mandates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(signedMandatePayload),
-      });
-
-      if (!submitRes.ok) {
-        const submitErr = await submitRes.json();
-        throw new Error(submitErr.message || 'Server rejected mandate signature');
-      }
-
-      const submitData = await submitRes.json();
-      setUserIssuedMandate(submitData.mandate);
-      setIssueStatusText(null);
-      fetchMandates();
-    } catch (err: any) {
-      setIssueError(err.message || 'Failed to issue mandate');
-      setIssueStatusText(null);
-    } finally {
-      setIssueLoading(false);
-    }
-  };
-
-  const runUserMandateTest = async (testType: 'ALLOWED' | 'OVER_CAP' | 'REVOKED') => {
-    if (!userIssuedMandate || !inMemoryAgent) return;
-    setUserTestRunning(testType);
-    setUserTestResult(null);
-
-    try {
-      let amountUnits = '1000000'; // $1.00 USDC
-      if (testType === 'OVER_CAP') {
-        amountUnits = '10000000'; // $10.00 USDC (exceeds total cap)
-      }
-
-      if (testType === 'REVOKED') {
-        await fetch(`/api/mandates/${userIssuedMandate.mandateId}/revoke`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: 'Operator testing revocation policy' }),
-        });
-        fetchMandates();
-      }
-
-      // 1. Get canonical proof template
-      const templateRes = await fetch('/api/proofs/template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mandateHash: userIssuedMandate.mandateHash,
-          agentPubkey: inMemoryAgent.agentPubkey,
-          amount: amountUnits,
-        }),
-      });
-      const templateData = await templateRes.json();
-
-      // 2. In-memory agent signs canonical JSON proof
-      const proofBytes = new TextEncoder().encode(templateData.canonicalJson);
-      const agentProofSig = await inMemoryAgent.signBytes(proofBytes);
-
-      const signedProof = {
-        ...templateData.core,
-        proofHash: templateData.proofHash,
-        signature: agentProofSig,
-      };
-
-      // 3. Submit to PDP signing endpoint
-      const signRes = await fetch('/api/sign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mandateHash: userIssuedMandate.mandateHash,
-          proof: signedProof,
-          transactionMessageBytes: btoa('mock-test-svm-transaction-message'),
-        }),
-      });
-
-      const signData = await signRes.json();
-      setUserTestResult({
-        testType,
-        statusCode: signRes.status,
-        decision: signData.decision || (signRes.status === 200 ? 'ALLOW' : 'DENY'),
-        reasonCodes:
-          signData.reasonCodes ||
-          (signRes.status === 200 ? ['POLICY_PASSED_ALL_GATES'] : ['POLICY_VIOLATION']),
-        receipt: signData.receipt,
-        details:
-          testType === 'ALLOWED'
-            ? 'Agent payment under cap approved. Spend recorded and receipt issued.'
-            : testType === 'OVER_CAP'
-            ? 'Agent payment rejected: Amount exceeds mandate limits (AMOUNT_EXCEEDS_CAP).'
-            : 'Agent payment rejected: Mandate was revoked by operator (REVOKED_MANDATE).',
-      });
-
-      if (signData.receipt) {
-        setActiveReceipt(signData.receipt);
-      }
-      fetchMandates();
-      fetchReceipts();
-    } catch (err: any) {
-      setUserTestResult({
-        testType,
-        statusCode: 500,
-        decision: 'DENY',
-        details: err.message || 'Test failed',
-      });
-    } finally {
-      setUserTestRunning(null);
-    }
-  };
-
-  const runScenario = async (scenario: string) => {
-    setRunningScenario(scenario);
-    try {
-      const res = await fetch('/api/scenarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setScenarioResults((prev) => ({ ...prev, [scenario]: data }));
-        if (scenario !== 'REAL_DEVNET') {
-          setActiveReceipt(data.receipt);
-        } else {
-          setActiveReceipt(null);
-        }
-        if (data.decision === 'REVIEW') {
-          setPendingReviewReceipt(data.receipt);
-        }
-      } else {
-        const errorMsg = data.message || data.error || 'Scenario request failed';
-        setScenarioResults((prev) => ({
-          ...prev,
-          [scenario]: {
-            scenario,
-            statusCode: res.status,
-            decision: 'DENY',
-            latencyMs: 0,
-            details: errorMsg,
-            message: data.message,
-            error: data.error,
-            explorerUrl: data.explorerUrl,
-          },
-        }));
-        if (scenario === 'REAL_DEVNET') {
-          setActiveReceipt(null);
-        }
-      }
-      fetchMandates();
-      fetchReceipts();
-    } catch (err: any) {
-      console.error('Scenario error:', err);
-      const errorMsg = err.message || 'Scenario network request failed';
-      setScenarioResults((prev) => ({
-        ...prev,
-        [scenario]: {
-          scenario,
-          statusCode: 500,
-          decision: 'DENY',
-          latencyMs: 0,
-          details: errorMsg,
-          message: errorMsg,
-          error: 'NETWORK_ERROR',
-        },
-      }));
-      if (scenario === 'REAL_DEVNET') {
-        setActiveReceipt(null);
-      }
-    } finally {
-      setRunningScenario(null);
-    }
-  };
-
-  const runAllScenarios = async () => {
-    const scenarios = ['ALLOW', 'OVER_CAP', 'REVOKED', 'EXPIRED', 'REPLAY', 'REVIEW'];
-    for (const sc of scenarios) {
-      await runScenario(sc);
-    }
-  };
-
-  const handleRevokeMandate = async (mandateId: string) => {
-    setRevokingId(mandateId);
-    try {
-      const res = await fetch(`/api/mandates/${mandateId}/revoke`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Revoked via interactive console' }),
-      });
-      if (res.ok) {
-        fetchMandates();
-        fetchReceipts();
-      }
-    } catch (err) {
-      console.error('Revocation error:', err);
-    } finally {
-      setRevokingId(null);
-    }
-  };
-
-  const handleReviewAction = async (action: 'APPROVE' | 'REJECT') => {
-    if (!pendingReviewReceipt) return;
-    setReviewActionLoading(true);
-    try {
-      const res = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receiptId: pendingReviewReceipt.receiptId,
-          action,
-          reason: `${action === 'APPROVE' ? 'Approved' : 'Rejected'} via operator dashboard`,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setActiveReceipt(data.receipt);
-        setPendingReviewReceipt(null);
-        fetchMandates();
-        fetchReceipts();
-      }
-    } catch (err) {
-      console.error('Review action error:', err);
-    } finally {
-      setReviewActionLoading(false);
-    }
-  };
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-16">
       {/* 1. Hero Section */}
       <HeroSection />
 
-      {/* 2. How It Works */}
-      <HowItWorksSection />
+      {/* 2. Compact 3-Step "How It Works" Strip */}
+      <section className="space-y-6 pt-4 border-t border-border/50">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 text-xs font-mono text-cyan-400 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span>Deterministic Enforcement</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              How CredaVer Works
+            </h2>
+          </div>
+          <Link href="/how-it-works">
+            <Button variant="ghost" size="sm" className="text-xs font-mono text-cyan-400 hover:text-cyan-300 p-0 hover:bg-transparent">
+              <span>Detailed architecture & limits</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          </Link>
+        </div>
 
-      {/* 3. Live Demo (Scenario Runner) */}
-      <LiveDemoSection
-        runningScenario={runningScenario}
-        scenarioResults={scenarioResults}
-        activeReceipt={activeReceipt}
-        pendingReviewReceipt={pendingReviewReceipt}
-        reviewActionLoading={reviewActionLoading}
-        onRunScenario={runScenario}
-        onRunAllScenarios={runAllScenarios}
-        onReviewAction={handleReviewAction}
-      />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <Card className="p-6 bg-surface-card/80 border-border/80 space-y-3 relative overflow-hidden group hover:border-cyan-500/50 transition-colors">
+            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono font-bold text-sm">
+              01
+            </div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Key className="w-4 h-4 text-cyan-400" />
+              Issue Mandate
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Operator signs a bounded spending envelope in Phantom or any standard wallet with strict limits: per-transaction cap, total lifetime spend, expiry, and human review threshold.
+            </p>
+          </Card>
 
-      {/* 4. On-Chain Proof */}
-      <OnChainProofSection />
+          <Card className="p-6 bg-surface-card/80 border-border/80 space-y-3 relative overflow-hidden group hover:border-cyan-500/50 transition-colors">
+            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono font-bold text-sm">
+              02
+            </div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-cyan-400" />
+              Policy Gate (PDP)
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              When an agent initiates an x402 payment, the CredaVer Policy Decision Point evaluates 12 deterministic gates in under 15ms. The AI agent never touches private wallet keys.
+            </p>
+          </Card>
 
-      {/* 5. Active Mandates */}
-      <ActiveMandatesSection
-        mandates={mandates}
-        mandatesLoading={mandatesLoading}
-        revokingId={revokingId}
-        onRefresh={() => fetchMandates()}
-        onRevoke={handleRevokeMandate}
-        showAllMandates={showAllMandates}
-        onToggleShowAll={handleToggleShowAll}
-        showIssuePanel={showIssuePanel}
-        onToggleIssuePanel={handleOpenIssuePanel}
-        phantomPubkey={phantomPubkey}
-        isPhantomConnected={isPhantomConnected}
-        onConnectPhantom={openModal}
-        inMemoryAgent={inMemoryAgent}
-        mandateMaxPerTx={mandateMaxPerTx}
-        setMandateMaxPerTx={setMandateMaxPerTx}
-        mandateTotalCap={mandateTotalCap}
-        setMandateTotalCap={setMandateTotalCap}
-        mandateReviewThreshold={mandateReviewThreshold}
-        setMandateReviewThreshold={setMandateReviewThreshold}
-        issueLoading={issueLoading}
-        issueStatusText={issueStatusText}
-        issueError={issueError}
-        onSignAndIssueMandate={handleSignAndIssueMandate}
-        userIssuedMandate={userIssuedMandate}
-        userTestRunning={userTestRunning}
-        userTestResult={userTestResult}
-        onRunUserMandateTest={runUserMandateTest}
-      />
+          <Card className="p-6 bg-surface-card/80 border-border/80 space-y-3 relative overflow-hidden group hover:border-cyan-500/50 transition-colors">
+            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono font-bold text-sm">
+              03
+            </div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <FileCheck2 className="w-4 h-4 text-cyan-400" />
+              Signed Receipt & Anchor
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Every decision produces an immutable RFC 8785 canonical JSON receipt signed with Ed25519, anchored to Solana devnet via SPL Memo for permanent verification.
+            </p>
+          </Card>
+        </div>
+      </section>
 
-      {/* 6. Signed Receipts */}
-      <SignedReceiptsSection
-        receipts={receipts}
-        receiptsLoading={receiptsLoading}
-        onRefresh={fetchReceipts}
-      />
+      {/* 3. Three "See It Work" Cards */}
+      <section className="space-y-6 pt-4 border-t border-border/50">
+        <div>
+          <div className="inline-flex items-center gap-2 text-xs font-mono text-cyan-400 mb-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Interactive Experience</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+            See It in Action
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            Explore live policy enforcement, cryptographic verification, and on-chain devnet transactions.
+          </p>
+        </div>
 
-      {/* 7. Five Separate Concepts */}
-      <CoreConceptsSection />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Live Demo */}
+          <Card glow className="p-6 bg-surface-card/90 border-cyan-500/40 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Play className="w-5 h-5 ml-0.5" />
+                </div>
+                <Badge variant="cyan" className="font-mono text-[11px]">
+                  Live Runner
+                </Badge>
+              </div>
+              <h3 className="text-lg font-bold text-white">Live Demo & Scenarios</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Test all 6 policy scenarios (ALLOW, OVER_CAP, REVOKED, EXPIRED, REPLAY, REVIEW) and execute real x402 payment settlements on Solana devnet.
+              </p>
+            </div>
+            <Link href="/demo" className="pt-3 border-t border-border/60">
+              <Button variant="primary" size="sm" className="w-full justify-center">
+                <span>Open Demo Runner</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Button>
+            </Link>
+          </Card>
 
-      {/* 8. Early Access */}
+          {/* Card 2: Verification Portal */}
+          <Card glow className="p-6 bg-surface-card/90 border-border/90 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <Badge variant="violet" className="font-mono text-[11px]">
+                  Public Verifier
+                </Badge>
+              </div>
+              <h3 className="text-lg font-bold text-white">Receipt Verification</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Cryptographically verify any decision receipt by receipt ID, canonical SHA-256 hash, or on-chain transaction memo signature.
+              </p>
+            </div>
+            <Link href="/verify" className="pt-3 border-t border-border/60">
+              <Button variant="outline" size="sm" className="w-full justify-center">
+                <span>Open Verification Portal</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Button>
+            </Link>
+          </Card>
+
+          {/* Card 3: On-Chain Proof */}
+          <Card glow className="p-6 bg-surface-card/90 border-border/90 space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <Badge variant="green" className="font-mono text-[11px]">
+                  SPL Memo
+                </Badge>
+              </div>
+              <h3 className="text-lg font-bold text-white">On-Chain Proof</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Inspect real Solana devnet transactions anchored with the standard SPL Memo program, verifiable in independent explorers.
+              </p>
+            </div>
+            <Link href="/proof" className="pt-3 border-t border-border/60">
+              <Button variant="outline" size="sm" className="w-full justify-center">
+                <span>View On-Chain Proof</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Button>
+            </Link>
+          </Card>
+        </div>
+      </section>
+
+      {/* 4. Small "Verified on Solana Devnet" Proof Strip */}
+      <section className="p-4 sm:p-5 rounded-2xl bg-surface-card/70 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-mono font-bold text-white flex items-center gap-2">
+              <span>Verified on Solana Devnet Cluster</span>
+              <Badge variant="green" className="text-[10px] py-0 px-1 font-mono">
+                Real Anchors
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Decision receipts are committed to the public Solana ledger using the official SPL Memo Program.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            href={REAL_S5_EXPLORER_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-border/80 text-xs font-mono text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/50 transition-colors"
+          >
+            <span>View Anchor on Explorer</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+          <Link href="/proof">
+            <Button variant="outline" size="sm" className="text-xs">
+              <span>Learn Anchoring</span>
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      {/* 5. Small Early Access Form */}
       <EarlyAccessSection />
     </div>
   );

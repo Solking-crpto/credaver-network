@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -14,17 +15,20 @@ import {
   ExternalLink,
   Code2,
   Terminal,
+  ShieldAlert,
+  FolderGit2,
+  CheckCircle2,
 } from 'lucide-react';
 
-export const metadata = {
-  title: 'Documentation | CredaVer Network',
+export const metadata: Metadata = {
+  title: 'Documentation',
   description:
-    'Technical architecture, cryptographic domain model, 12 policy gates, and API reference for the CredaVer Policy Decision Point.',
+    'Technical architecture, cryptographic domain model, 12 policy gates, security notes, and full REST API reference for CredaVer Network.',
 };
 
 export default function DocsPage() {
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 space-y-12 text-slate-200">
+    <div className="max-w-5xl mx-auto py-4 space-y-12 text-slate-200">
       {/* Top Header / Breadcrumbs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-6">
         <div className="space-y-1.5">
@@ -34,7 +38,7 @@ export default function DocsPage() {
               className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Dashboard</span>
+              <span>Back to Home</span>
             </Link>
             <span className="text-muted text-xs">/</span>
             <span className="text-xs font-mono text-slate-400">Documentation</span>
@@ -48,18 +52,18 @@ export default function DocsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Badge variant="cyan" className="font-mono text-xs">
             v1.0 (Devnet)
           </Badge>
           <a
-            href="https://github.com/credaver/credaver-network"
+            href="https://github.com/credaver/credaver-network/tree/main/docs"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1 border border-border/80 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-card transition-colors"
+            className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 border border-cyan-500/40 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-card transition-colors"
           >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>GitHub</span>
+            <FolderGit2 className="w-3.5 h-3.5" />
+            <span>GitHub Docs Folder</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
@@ -200,11 +204,11 @@ export default function DocsPage() {
         </Card>
       </section>
 
-      {/* 3. Receipts & Canonical JSON */}
+      {/* 3. Receipts & SPL Memo Anchors */}
       <section id="receipts" className="space-y-4">
         <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
           <FileCheck2 className="w-5 h-5 text-cyan-400" />
-          3. Cryptographic Receipts &amp; On-Chain Anchors
+          3. Receipts &amp; SPL Memo Anchoring
         </h2>
         <Card className="p-6 bg-surface-card/85 space-y-4 border-border/80 text-xs sm:text-sm text-slate-300 leading-relaxed">
           <p>
@@ -255,7 +259,57 @@ export default function DocsPage() {
               <span className="font-bold text-white">/api/mandates</span>
             </div>
             <p className="text-slate-400 text-[11px]">
-              Lists operator mandates belonging to the visitor session. Defaults to active only; supports ?showAll=true.
+              Lists operator mandates belonging to visitor session. Defaults to active only; supports ?showAll=true.
+            </p>
+          </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="cyan" className="px-2 py-0.5">POST</Badge>
+              <span className="font-bold text-white">/api/mandates</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Submits a co-signed operator and agent mandate for verification and storage.
+            </p>
+          </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="cyan" className="px-2 py-0.5">POST</Badge>
+              <span className="font-bold text-white">/api/mandates/prepare</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Constructs the canonical RFC 8785 mandate core and readable text message for Phantom signing.
+            </p>
+          </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="cyan" className="px-2 py-0.5">POST</Badge>
+              <span className="font-bold text-white">/api/mandates/[id]/revoke</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Emergency revocation endpoint setting the mandate status to revoked.
+            </p>
+          </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="green" className="px-2 py-0.5">GET</Badge>
+              <span className="font-bold text-white">/api/receipts</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Lists signed decision receipts for the current visitor session, newest first.
+            </p>
+          </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="green" className="px-2 py-0.5">GET</Badge>
+              <span className="font-bold text-white">/api/receipts/[id]</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Returns single stored receipt record by receipt ID.
             </p>
           </Card>
 
@@ -268,7 +322,48 @@ export default function DocsPage() {
               Operator review queue actions: approve or reject high-value transactions held in REVIEW status.
             </p>
           </Card>
+
+          <Card className="p-4 bg-surface-card/85 space-y-2 border-border/80">
+            <div className="flex items-center gap-2">
+              <Badge variant="green" className="px-2 py-0.5">GET</Badge>
+              <span className="font-bold text-white">/api/health</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              System health and devnet connectivity check returning cluster status and timestamp.
+            </p>
+          </Card>
         </div>
+      </section>
+
+      {/* 5. Security Notes & Non-Trustless Disclosure */}
+      <section id="security" className="space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+          <ShieldAlert className="w-5 h-5 text-amber-400" />
+          5. Security Notes &amp; Non-Trustless Disclosure
+        </h2>
+        <Card className="p-6 bg-surface-card/85 space-y-4 border-amber-500/30 text-xs sm:text-sm text-slate-300 leading-relaxed">
+          <div className="flex items-center gap-2 text-amber-400 font-bold">
+            <ShieldAlert className="w-4 h-4" />
+            <span>Honest Security Model</span>
+          </div>
+          <p>
+            CredaVer rejects misleading "trustless" buzzwords. Security relies on deterministic code execution and asymmetric cryptography:
+          </p>
+          <ul className="space-y-2 list-disc list-inside font-mono text-xs text-slate-400">
+            <li>
+              <strong>Deterministic code runs in isolation</strong>: Gates 1–12 are written in immutable TypeScript validation logic. AI models are not in the loop of decision evaluation and cannot prompt-inject policy decisions.
+            </li>
+            <li>
+              <strong>Zero funding key custody for agents</strong>: Agents generate throwaway identity keypairs. Compromising the agent model yields zero private keys to on-chain balances.
+            </li>
+            <li>
+              <strong>Cryptographic non-repudiation</strong>: The PDP signs every ALLOW, DENY, and REVIEW. If the server ever signed an unauthorized payment, the receipt stands as mathematical evidence of breach.
+            </li>
+            <li>
+              <strong>Devnet scope</strong>: All tokens used in this hackathon demonstration are devnet tokens without economic value.
+            </li>
+          </ul>
+        </Card>
       </section>
     </div>
   );
