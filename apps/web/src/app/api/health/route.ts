@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   return NextResponse.json({
+    ok: true,
     status: 'ok',
     service: 'CredaVer Policy Decision Point',
     network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',

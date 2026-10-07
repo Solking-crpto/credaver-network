@@ -57,7 +57,7 @@ export default function DocsPage() {
             v1.0 (Devnet)
           </Badge>
           <a
-            href="https://github.com/credaver/credaver-network/tree/main/docs"
+            href="https://github.com/Solking-crpto/credaver-network"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 border border-cyan-500/40 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-card transition-colors"

@@ -13,6 +13,8 @@ describe('Route & Internal Link Integrity Audit', () => {
     '/proof',
     '/verify',
     '/docs',
+    '/concepts',
+    '/early-access',
     '/api/auth/challenge',
     '/api/auth/verify',
     '/api/authority',
@@ -113,6 +115,7 @@ describe('Route & Internal Link Integrity Audit', () => {
     expect(res.status).toBe(200);
 
     const data = await res.json();
+    expect(data.ok).toBe(true);
     expect(data.status).toBe('ok');
     expect(data.service).toBe('CredaVer Policy Decision Point');
     expect(data.cluster).toBe('devnet');

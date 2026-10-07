@@ -37,7 +37,7 @@ export const HeroSection: React.FC = () => {
             <Link href="/demo">
               <Button variant="primary" size="lg" className="shadow-glow min-h-[48px] px-6">
                 <Play className="w-4 h-4 mr-2" />
-                <span>Try Live Demo</span>
+                <span>Try the live demo</span>
               </Button>
             </Link>
 

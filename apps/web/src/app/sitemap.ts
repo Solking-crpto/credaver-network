@@ -5,14 +5,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const routes = [
     '',
-    '/how-it-works',
     '/demo',
     '/mandates',
     '/receipts',
-    '/reviews',
     '/proof',
-    '/verify',
+    '/concepts',
+    '/early-access',
     '/docs',
+    '/verify',
+    '/how-it-works',
+    '/reviews',
   ];
 
   const now = new Date();

@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Shield, Github, BookOpen, ExternalLink, Play, Lock, FileCheck2, Cpu } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -8,7 +9,14 @@ export const Footer: React.FC = () => {
       <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              <Image
+                src="/brand/credaver-mark-transparent.png"
+                alt="CredaVer Network"
+                width={24}
+                height={24}
+                className="h-6 w-auto object-contain"
+              />
               <span className="font-bold text-base text-white tracking-tight">
                 Creda<span className="text-gradient">Ver</span> Network
               </span>
@@ -26,11 +34,6 @@ export const Footer: React.FC = () => {
             <div className="font-bold text-slate-300 uppercase tracking-wider mb-2">Protocol & App</div>
             <ul className="space-y-1.5 text-slate-400">
               <li>
-                <Link href="/how-it-works" className="hover:text-cyan-400 transition-colors">
-                  How It Works
-                </Link>
-              </li>
-              <li>
                 <Link href="/demo" className="hover:text-cyan-400 transition-colors">
                   Live Demo Runner
                 </Link>
@@ -46,8 +49,13 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link href="/reviews" className="hover:text-cyan-400 transition-colors">
-                  Human Reviews
+                <Link href="/concepts" className="hover:text-cyan-400 transition-colors">
+                  Core Concepts
+                </Link>
+              </li>
+              <li>
+                <Link href="/early-access" className="hover:text-cyan-400 transition-colors">
+                  Early Access
                 </Link>
               </li>
             </ul>
@@ -63,7 +71,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <Link href="/verify" className="hover:text-cyan-400 transition-colors">
-                  Verify Portal
+                  Verify Receipts
                 </Link>
               </li>
               <li>
@@ -73,7 +81,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <Link
-                  href="https://github.com/credaver-network"
+                  href="https://github.com/Solking-crpto/credaver-network"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-cyan-400 transition-colors flex items-center gap-1"

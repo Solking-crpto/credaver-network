@@ -59,14 +59,12 @@ export const Navigation: React.FC = () => {
 
   const navLinks = [
     { href: '/', label: 'Home' },
-    { href: '/how-it-works', label: 'How it works' },
     { href: '/demo', label: 'Demo' },
     { href: '/mandates', label: 'Mandates' },
     { href: '/receipts', label: 'Receipts' },
-    { href: '/reviews', label: 'Reviews', hasBadge: !!pendingReviewReceipt },
     { href: '/proof', label: 'Proof' },
-    { href: '/verify', label: 'Verify' },
     { href: '/docs', label: 'Docs' },
+    { href: '/verify', label: 'Verify' },
   ];
 
   const isLinkActive = (href: string) => {
@@ -84,36 +82,24 @@ export const Navigation: React.FC = () => {
 
       <header className="glass-panel border-b border-border/80">
         <div className="max-w-content mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
-          {/* Brand Logo in rounded tile */}
+          {/* Brand Logo & Name */}
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="flex items-center gap-2.5 group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+              className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan rounded-lg"
               aria-label="CredaVer Network Home"
             >
-              {/* Rounded tile containing logo so dark background looks intentional */}
-              <div className="hidden sm:flex items-center justify-center px-3 py-1.5 rounded-xl border border-border/80 bg-surface/90 shadow-sm group-hover:border-cyan-500/50 transition-colors">
-                <Image
-                  src="/brand/credaver-logo-full.png"
-                  alt="CredaVer Network"
-                  width={140}
-                  height={36}
-                  priority
-                  className="h-8 w-auto object-contain rounded"
-                />
-              </div>
-
-              {/* Mobile mark in rounded tile */}
-              <div className="flex sm:hidden items-center justify-center p-1.5 rounded-xl border border-border/80 bg-surface/90 shadow-sm group-hover:border-cyan-500/50 transition-colors">
-                <Image
-                  src="/brand/credaver-mark.png"
-                  alt="CredaVer Network"
-                  width={32}
-                  height={32}
-                  priority
-                  className="h-7 w-7 object-contain rounded"
-                />
-              </div>
+              <Image
+                src="/brand/credaver-mark-transparent.png"
+                alt="CredaVer Network"
+                width={32}
+                height={32}
+                priority
+                className="h-8 w-auto object-contain"
+              />
+              <span className="font-bold text-base tracking-tight text-white group-hover:text-cyan-300 transition-colors">
+                Creda<span className="text-gradient">Ver</span> Network
+              </span>
             </Link>
 
             <Badge variant="cyan" className="hidden xl:inline-flex text-[11px] font-mono">
@@ -138,9 +124,6 @@ export const Navigation: React.FC = () => {
                   aria-current={active ? 'page' : undefined}
                 >
                   <span>{link.label}</span>
-                  {link.hasBadge && (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" title="Pending reviews in queue" />
-                  )}
                 </Link>
               );
             })}
@@ -234,11 +217,6 @@ export const Navigation: React.FC = () => {
                     aria-current={active ? 'page' : undefined}
                   >
                     <span>{link.label}</span>
-                    {link.hasBadge && (
-                      <Badge variant="amber" className="text-[10px] font-mono">
-                        Action Required
-                      </Badge>
-                    )}
                   </Link>
                 );
               })}
