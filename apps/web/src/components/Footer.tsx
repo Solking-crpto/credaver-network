@@ -13,8 +13,8 @@ export const Footer: React.FC = () => {
               <Image
                 src="/brand/credaver-mark-transparent.png"
                 alt="CredaVer Network"
-                width={24}
-                height={24}
+                width={535}
+                height={526}
                 className="h-6 w-auto object-contain"
               />
               <span className="font-bold text-base text-white tracking-tight">

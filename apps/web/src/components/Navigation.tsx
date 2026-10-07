@@ -92,8 +92,8 @@ export const Navigation: React.FC = () => {
               <Image
                 src="/brand/credaver-mark-transparent.png"
                 alt="CredaVer Network"
-                width={32}
-                height={32}
+                width={535}
+                height={526}
                 priority
                 className="h-8 w-auto object-contain"
               />
