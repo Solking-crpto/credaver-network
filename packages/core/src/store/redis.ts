@@ -132,8 +132,17 @@ export class RedisStore implements ICredaverStore {
     return redisGet<SignedMandate>(`credav:mandate:${mandateId}`, this.config);
   }
 
+  async getMandateByHash(mandateHash: string): Promise<SignedMandate | null> {
+    const mandateId = await redisGet<string>(`credav:mandate-hash:${mandateHash}`, this.config);
+    if (!mandateId) return null;
+    return this.getMandate(mandateId);
+  }
+
   async saveMandate(mandate: SignedMandate): Promise<void> {
     await redisSet(`credav:mandate:${mandate.mandateId}`, mandate, 365 * 86400, this.config);
+    if (mandate.mandateHash) {
+      await redisSet(`credav:mandate-hash:${mandate.mandateHash}`, mandate.mandateId, 365 * 86400, this.config);
+    }
     await redisCommand(['SADD', 'credav:mandates:all', mandate.mandateId], this.config);
   }
 

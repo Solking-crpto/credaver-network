@@ -72,6 +72,11 @@ describe('Milestone 2: Persistence Layer & Mandate Lifecycle', () => {
       expect(fetched).toBeDefined();
       expect(fetched?.mandateId).toBe('m-1');
 
+      // Fetch by Hash
+      const fetchedByHash = await store.getMandateByHash(mandate1.mandateHash);
+      expect(fetchedByHash).toBeDefined();
+      expect(fetchedByHash?.mandateId).toBe('m-1');
+
       // List all
       const all = await store.listMandates();
       expect(all).toHaveLength(2);

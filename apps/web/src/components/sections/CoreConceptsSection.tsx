@@ -10,7 +10,7 @@ export const CoreConceptsSection: React.FC = () => {
       icon: Key,
       color: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10',
-      description: 'Phantom wallet Ed25519 signature proof of key control. Purely cryptographic verification with zero KYC required.',
+      description: 'Phantom wallet Ed25519 signature proof of key control. Purely cryptographic verification of keypair control, with no real-world identity or KYC claims.',
     },
     {
       num: '2',

@@ -111,6 +111,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const data = await res.json();
         if (res.ok && data.mandates) {
           setMandates(data.mandates);
+          setUserIssuedMandate((prev: any) => {
+            if (!prev) return prev;
+            const updated = data.mandates.find((m: any) => m.mandateId === prev.mandateId);
+            return updated ? updated : prev;
+          });
+          return data.mandates;
         }
       } catch {
         // ignore
@@ -231,6 +237,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         operatorSignature,
         agentCounterSignature,
         revoked: false,
+        source: 'user',
       };
 
       const submitRes = await fetch('/api/mandates', {
@@ -274,16 +281,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         let amountUnits = '1000000'; // $1.00 USDC
         if (testType === 'OVER_CAP') {
-          amountUnits = '10000000'; // $10.00 USDC
+          amountUnits = '10000000'; // $10.00 USDC (exceeds $5 cap)
         }
 
         if (testType === 'REVOKED') {
-          await fetch(`/api/mandates/${userIssuedMandate.mandateId}/revoke`, {
+          const revRes = await fetch(`/api/mandates/${userIssuedMandate.mandateId}/revoke`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason: 'Operator testing revocation policy' }),
           });
-          fetchMandates();
+          if (!revRes.ok) {
+            const revErr = await revRes.json();
+            throw new Error(revErr.message || 'Failed to revoke mandate');
+          }
+          await fetchMandates();
         }
 
         const templateRes = await fetch('/api/proofs/template', {
@@ -295,8 +306,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             amount: amountUnits,
           }),
         });
-        const templateData = await templateRes.json();
 
+        if (!templateRes.ok) {
+          const templErr = await templateRes.json();
+          throw new Error(templErr.message || 'Failed to prepare payment proof template');
+        }
+
+        const templateData = await templateRes.json();
         const proofBytes = new TextEncoder().encode(templateData.canonicalJson);
         const agentProofSig = await inMemoryAgent.signBytes(proofBytes);
 
@@ -313,37 +329,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             mandateHash: userIssuedMandate.mandateHash,
             proof: signedProof,
             transactionMessageBytes: btoa('mock-test-svm-transaction-message'),
+            mandate: userIssuedMandate,
           }),
         });
 
         const signData = await signRes.json();
+
+        // Derive decision, reasonCodes, message, and statusCode strictly from response
+        const isHttpError = signRes.status !== 200 && signRes.status !== 202 && signRes.status !== 403;
+        const decision = isHttpError
+          ? 'ERROR'
+          : signData.decision || (signRes.status === 200 ? 'ALLOW' : 'DENY');
+
+        const reasonCodes: string[] = signData.reasonCodes || signData.receipt?.reasonCodes || [];
+
+        let message = '';
+        if (isHttpError) {
+          message = signData.message || signData.error || `Server returned HTTP ${signRes.status}`;
+        } else if (decision === 'ALLOW') {
+          message = 'Policy evaluation passed all gates. Constrained signature issued and spend recorded.';
+        } else if (decision === 'REVIEW') {
+          message = 'Transaction held for human review threshold.';
+        } else {
+          message =
+            signData.message ||
+            (reasonCodes.length > 0 ? `Rejected: ${reasonCodes.join(', ')}` : 'Policy denied');
+        }
+
         setUserTestResult({
           testType,
           statusCode: signRes.status,
-          decision: signData.decision || (signRes.status === 200 ? 'ALLOW' : 'DENY'),
-          reasonCodes:
-            signData.reasonCodes ||
-            (signRes.status === 200 ? ['POLICY_PASSED_ALL_GATES'] : ['POLICY_VIOLATION']),
+          decision,
+          reasonCodes,
+          message,
           receipt: signData.receipt,
-          details:
-            testType === 'ALLOWED'
-              ? 'Agent payment under cap approved. Spend recorded and receipt issued.'
-              : testType === 'OVER_CAP'
-              ? 'Agent payment rejected: Amount exceeds mandate limits (AMOUNT_EXCEEDS_CAP).'
-              : 'Agent payment rejected: Mandate was revoked by operator (REVOKED_MANDATE).',
         });
 
         if (signData.receipt) {
           setActiveReceipt(signData.receipt);
+          await fetchReceipts();
         }
-        fetchMandates();
-        fetchReceipts();
+
+        await fetchMandates();
       } catch (err: any) {
         setUserTestResult({
           testType,
           statusCode: 500,
-          decision: 'DENY',
-          details: err.message || 'Test failed',
+          decision: 'ERROR',
+          reasonCodes: [],
+          message: err.message || 'Client or network failure during test execution',
         });
       } finally {
         setUserTestRunning(null);

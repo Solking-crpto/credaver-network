@@ -201,7 +201,8 @@ export async function executeRealDevnetPayment(options?: {
       },
       operator.secretKey,
       agent.secretKey,
-      options?.sessionId ?? null
+      options?.sessionId ?? null,
+      'demo'
     );
     await store.saveMandate(mandate);
 

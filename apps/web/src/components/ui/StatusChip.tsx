@@ -14,6 +14,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({ status }) => {
       return <Badge variant="green">{normalized}</Badge>;
     case 'DENY':
     case 'REVOKED':
+    case 'ERROR':
       return <Badge variant="rose">{normalized}</Badge>;
     case 'REVIEW':
     case 'EXPIRED':

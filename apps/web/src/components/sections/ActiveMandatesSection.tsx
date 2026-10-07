@@ -15,6 +15,8 @@ import {
   XCircle,
   ExternalLink,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { InMemoryAgent } from '../../lib/browser-agent';
 
@@ -82,6 +84,7 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
   onRunUserMandateTest,
 }) => {
   const [confirmingRevokeId, setConfirmingRevokeId] = useState<string | null>(null);
+  const [showDemoMandates, setShowDemoMandates] = useState(false);
 
   const truncate = (str: string, len: number = 8) =>
     str ? `${str.slice(0, len)}...${str.slice(-4)}` : '';
@@ -98,6 +101,118 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
     } else {
       setConfirmingRevokeId(mandateId);
     }
+  };
+
+  const userMandates = mandates.filter(
+    (m) =>
+      m.source === 'user' ||
+      (!m.source &&
+        !m.mandateId.startsWith('mandate-sc-') &&
+        !m.mandateId.startsWith('mandate-real-devnet-'))
+  );
+
+  const demoMandates = mandates.filter(
+    (m) =>
+      m.source === 'demo' ||
+      m.mandateId.startsWith('mandate-sc-') ||
+      m.mandateId.startsWith('mandate-real-devnet-')
+  );
+
+  const renderMandateCard = (m: any) => {
+    const cap = BigInt(m.totalCap || '0');
+    const spend = BigInt(m.currentSpend || '0');
+    const pct = cap > 0n ? Number((spend * 100n) / cap) : 0;
+    const isExpired = Date.now() > m.expiresAt;
+    const isConfirming = confirmingRevokeId === m.mandateId;
+
+    return (
+      <Card key={m.mandateId} className="p-5 border-border/80 bg-surface-card/75 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs font-bold text-white">{m.mandateId}</span>
+            {m.source && (
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                  m.source === 'user'
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                    : 'bg-slate-800 text-slate-400 border border-border/60'
+                }`}
+              >
+                {m.source}
+              </span>
+            )}
+          </div>
+          <StatusChip status={m.revoked ? 'REVOKED' : isExpired ? 'EXPIRED' : 'ACTIVE'} />
+        </div>
+
+        <div className="space-y-1.5 text-xs font-mono text-muted">
+          <div className="flex justify-between">
+            <span>Operator:</span>
+            <span className="text-slate-200">{truncate(m.operatorPubkey)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Agent:</span>
+            <span className="text-slate-200">{truncate(m.agentPubkey)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Per-Tx Limit:</span>
+            <span className="text-slate-200">{formatAmountUSDC(m.maxPerTx)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Total Cap:</span>
+            <span className="text-slate-200">{formatAmountUSDC(m.totalCap)}</span>
+          </div>
+        </div>
+
+        {/* Spend Progress Bar */}
+        <div className="space-y-1.5 pt-1">
+          <div className="flex justify-between text-xs font-mono text-slate-400">
+            <span>
+              Cumulative Spend ({formatAmountUSDC(spend.toString())} of {formatAmountUSDC(m.totalCap)})
+            </span>
+            <span className="text-white font-bold">{pct}%</span>
+          </div>
+          <div className="w-full h-2 bg-surface rounded-full overflow-hidden border border-border/60">
+            <div
+              className={`h-full transition-all ${pct >= 100 ? 'bg-rose-500' : 'bg-cyan-400'}`}
+              style={{ width: `${Math.min(100, pct)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Expiry & Revoke Controls with Confirm Step */}
+        <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs font-mono">
+          <span className="text-slate-400 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-muted" />
+            {isExpired ? 'Expired' : `Expires in ${Math.round((m.expiresAt - Date.now()) / 60000)}m`}
+          </span>
+
+          {!m.revoked && !isExpired && (
+            <div className="flex items-center gap-2">
+              {isConfirming && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRevokeId(null)}
+                  className="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded"
+                >
+                  Cancel
+                </button>
+              )}
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={revokingId === m.mandateId}
+                isLoading={revokingId === m.mandateId}
+                onClick={() => handleRevokeClick(m.mandateId)}
+                className="text-xs min-h-[34px] px-3"
+              >
+                {isConfirming ? 'Confirm Revoke?' : 'Revoke'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
   };
 
   return (
@@ -345,7 +460,7 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
           </div>
 
           {userTestResult && (
-            <div className="p-3 bg-surface rounded-lg border border-border/60 space-y-2 text-xs font-mono">
+            <div className="p-4 bg-surface rounded-xl border border-border/80 space-y-3 text-xs font-mono">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <StatusChip status={userTestResult.decision} />
@@ -353,12 +468,41 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
                     Test Result: {userTestResult.testType}
                   </span>
                 </div>
-                <span className="text-slate-400">HTTP {userTestResult.statusCode}</span>
+                <Badge
+                  variant={
+                    userTestResult.statusCode === 200
+                      ? 'green'
+                      : userTestResult.statusCode === 403
+                      ? 'rose'
+                      : 'amber'
+                  }
+                  className="font-mono text-[11px]"
+                >
+                  HTTP {userTestResult.statusCode}
+                </Badge>
               </div>
-              <p className="text-slate-300">{userTestResult.details}</p>
+
+              <p className="text-slate-200 leading-relaxed font-sans text-xs">
+                {userTestResult.message}
+              </p>
+
+              {userTestResult.reasonCodes && userTestResult.reasonCodes.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-muted text-[11px]">Reason Code:</span>
+                  {userTestResult.reasonCodes.map((code: string) => (
+                    <span
+                      key={code}
+                      className="px-2 py-0.5 rounded bg-surface-card border border-border/80 text-[11px] text-cyan-300 font-mono"
+                    >
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {userTestResult.receipt && (
-                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
-                  <span className="text-slate-400 text-[11px]">
+                <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">
                     Receipt #{userTestResult.receipt.receiptId}
                   </span>
                   <Link
@@ -374,97 +518,62 @@ export const ActiveMandatesSection: React.FC<ActiveMandatesSectionProps> = ({
         </Card>
       )}
 
-      {/* Mandates list */}
-      {mandates.length === 0 ? (
-        <Card className="text-center py-12 text-muted font-mono text-xs border-dashed border-border/80">
-          <p>No active operator mandates registered yet.</p>
-          <p className="mt-1 text-slate-500">Run a scenario in the Live Demo or issue one with Phantom above.</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {mandates.map((m) => {
-            const cap = BigInt(m.totalCap || '0');
-            const spend = BigInt(m.currentSpend || '0');
-            const pct = cap > 0n ? Number((spend * 100n) / cap) : 0;
-            const isExpired = Date.now() > m.expiresAt;
-            const isConfirming = confirmingRevokeId === m.mandateId;
+      {/* 1. Your Mandates (Operator Console) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-white">Your Mandates</h3>
+            <Badge variant="cyan" className="font-mono text-xs">
+              {userMandates.length}
+            </Badge>
+          </div>
+        </div>
 
-            return (
-              <Card key={m.mandateId} className="p-5 border-border/80 bg-surface-card/75 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-white">{m.mandateId}</span>
-                  <StatusChip status={m.revoked ? 'REVOKED' : isExpired ? 'EXPIRED' : 'ACTIVE'} />
-                </div>
+        {userMandates.length === 0 ? (
+          <Card className="text-center py-10 text-muted font-mono text-xs border-dashed border-border/80">
+            <p>No operator mandates issued by you yet.</p>
+            <p className="mt-1 text-slate-500">
+              Click &quot;Issue Mandate&quot; above to create one with your wallet.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {userMandates.map(renderMandateCard)}
+          </div>
+        )}
+      </div>
 
-                <div className="space-y-1.5 text-xs font-mono text-muted">
-                  <div className="flex justify-between">
-                    <span>Operator:</span>
-                    <span className="text-slate-200">{truncate(m.operatorPubkey)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Agent:</span>
-                    <span className="text-slate-200">{truncate(m.agentPubkey)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Per-Tx Limit:</span>
-                    <span className="text-slate-200">{formatAmountUSDC(m.maxPerTx)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Cap:</span>
-                    <span className="text-slate-200">{formatAmountUSDC(m.totalCap)}</span>
-                  </div>
-                </div>
+      {/* 2. Collapsible Demo Scenario Mandates */}
+      {demoMandates.length > 0 && (
+        <div className="space-y-4 pt-4 border-t border-border/50">
+          <button
+            type="button"
+            onClick={() => setShowDemoMandates((prev) => !prev)}
+            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-surface hover:bg-surface-elevated border border-border/70 text-left transition-colors"
+          >
+            <div className="flex items-center gap-2 text-xs font-mono">
+              {showDemoMandates ? (
+                <ChevronDown className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              )}
+              <span className="font-bold text-slate-200">
+                Demo scenario mandates ({demoMandates.length})
+              </span>
+              <span className="text-muted hidden sm:inline">
+                — generated by the scenario runner &amp; live settlements
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-cyan-400">
+              {showDemoMandates ? 'Hide' : 'Show'}
+            </span>
+          </button>
 
-                {/* Spend Progress Bar */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs font-mono text-slate-400">
-                    <span>
-                      Cumulative Spend ({formatAmountUSDC(spend.toString())} of {formatAmountUSDC(m.totalCap)})
-                    </span>
-                    <span className="text-white font-bold">{pct}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-surface rounded-full overflow-hidden border border-border/60">
-                    <div
-                      className={`h-full transition-all ${pct >= 100 ? 'bg-rose-500' : 'bg-cyan-400'}`}
-                      style={{ width: `${Math.min(100, pct)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Expiry & Revoke Controls with Confirm Step */}
-                <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs font-mono">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-muted" />
-                    {isExpired ? 'Expired' : `Expires in ${Math.round((m.expiresAt - Date.now()) / 60000)}m`}
-                  </span>
-
-                  {!m.revoked && !isExpired && (
-                    <div className="flex items-center gap-2">
-                      {isConfirming && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmingRevokeId(null)}
-                          className="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        disabled={revokingId === m.mandateId}
-                        isLoading={revokingId === m.mandateId}
-                        onClick={() => handleRevokeClick(m.mandateId)}
-                        className="text-xs min-h-[34px] px-3"
-                      >
-                        {isConfirming ? 'Confirm Revoke?' : 'Revoke'}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
+          {showDemoMandates && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+              {demoMandates.map(renderMandateCard)}
+            </div>
+          )}
         </div>
       )}
     </section>

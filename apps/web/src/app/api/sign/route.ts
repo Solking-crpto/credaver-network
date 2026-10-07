@@ -50,17 +50,31 @@ export async function POST(req: NextRequest) {
     const { mandateHash, proof, transactionMessageBytes, mandate: rawMandate } = parseResult.data;
     const store = getServerStore();
 
-    let mandate = null;
+    // 1. Resolve mandate via getMandateByHash first (with ID fallback)
+    let storedMandate = await store.getMandateByHash(mandateHash);
+    if (!storedMandate) {
+      storedMandate = await store.getMandate(mandateHash);
+    }
+
+    let mandate = storedMandate;
+
+    // 2. If the request also carries a mandate payload
     if (rawMandate) {
       const parsedMandate = SignedMandateSchema.safeParse(rawMandate);
       if (parsedMandate.success) {
-        mandate = parsedMandate.data;
-        await store.saveMandate(mandate);
-      }
-    }
+        const clientMandate = parsedMandate.data;
+        const existingById = await store.getMandate(clientMandate.mandateId);
+        const existing = existingById || storedMandate;
 
-    if (!mandate) {
-      mandate = await store.getMandate(mandateHash);
+        if (existing) {
+          // NEVER overwrite an existing stored record (revocation state always comes from store)
+          mandate = existing;
+        } else {
+          // Only save it if no stored mandate exists with that mandateId
+          await store.saveMandate(clientMandate);
+          mandate = clientMandate;
+        }
+      }
     }
 
     if (!mandate) {

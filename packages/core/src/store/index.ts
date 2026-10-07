@@ -48,6 +48,7 @@ export interface ICredaverStore {
   recordMandateSpend(mandateId: string, amount: bigint): Promise<bigint>;
 
   getMandate(mandateId: string): Promise<SignedMandate | null>;
+  getMandateByHash(mandateHash: string): Promise<SignedMandate | null>;
   saveMandate(mandate: SignedMandate): Promise<void>;
   revokeMandate(mandateId: string, reason?: string): Promise<void>;
   listMandates(filter?: MandateFilter): Promise<SignedMandate[]>;
@@ -68,6 +69,7 @@ export class MemoryStore implements ICredaverStore {
   private nonces = new Map<string, number>(); // nonce -> expiryMs
   private spends = new Map<string, bigint>();
   private mandates = new Map<string, SignedMandate>();
+  private mandateHashes = new Map<string, string>(); // mandateHash -> mandateId
   private receipts = new Map<string, SignedReceipt>();
   private auditEvents: AuditEvent[] = [];
 
@@ -98,8 +100,17 @@ export class MemoryStore implements ICredaverStore {
     return this.mandates.get(mandateId) ?? null;
   }
 
+  async getMandateByHash(mandateHash: string): Promise<SignedMandate | null> {
+    const mandateId = this.mandateHashes.get(mandateHash);
+    if (!mandateId) return null;
+    return this.getMandate(mandateId);
+  }
+
   async saveMandate(mandate: SignedMandate): Promise<void> {
     this.mandates.set(mandate.mandateId, mandate);
+    if (mandate.mandateHash) {
+      this.mandateHashes.set(mandate.mandateHash, mandate.mandateId);
+    }
   }
 
   async revokeMandate(mandateId: string, reason?: string): Promise<void> {
@@ -174,6 +185,7 @@ export class MemoryStore implements ICredaverStore {
     this.nonces.clear();
     this.spends.clear();
     this.mandates.clear();
+    this.mandateHashes.clear();
     this.receipts.clear();
     this.auditEvents = [];
   }

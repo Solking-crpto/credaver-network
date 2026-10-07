@@ -55,7 +55,7 @@ export default function EarlyAccessPage() {
           <Card className="p-5 bg-surface-card/80 border-border/80 space-y-2.5">
             <h3 className="font-bold text-sm text-white">Treasury & Risk Officers</h3>
             <p className="leading-relaxed text-slate-400">
-              Protocol teams who cannot tolerate unbounded hot-wallet keys. Set rigid per-tx limits, daily caps, and instant revocation switches.
+              Protocol teams who cannot tolerate unbounded hot-wallet keys. Set rigid per-tx limits, total spend caps, and instant revocation switches.
             </p>
           </Card>
         </div>

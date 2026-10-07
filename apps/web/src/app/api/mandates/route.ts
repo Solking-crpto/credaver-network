@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     const mandateWithSession = {
       ...mandate,
       sessionId: mandate.sessionId || sessionId,
+      source: mandate.source || 'user',
     };
 
     const store = getServerStore();

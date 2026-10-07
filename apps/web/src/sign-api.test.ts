@@ -309,12 +309,307 @@ describe('apps/web: POST /api/sign Constrained Signing Route', () => {
       );
     } finally {
       (process.env as any).NODE_ENV = originalEnv;
-      process.env.DEVNET_PAYMENT_SECRET_KEY = origPayment;
-      process.env.CREDAVER_AUTHORITY_SECRET_KEY = origAuthority;
-      process.env.RECEIPT_AUTHORITY_SECRET_KEY = origReceiptAuth;
-      process.env.ANCHOR_SECRET_KEY = origAnchor;
-      process.env.ANCHOR_PAYER_SECRET_KEY = origAnchorPayer;
-      process.env.ANCHOR_ON_CHAIN = origAnchorOnChain;
+      if (origPayment === undefined) delete process.env.DEVNET_PAYMENT_SECRET_KEY; else process.env.DEVNET_PAYMENT_SECRET_KEY = origPayment;
+      if (origAuthority === undefined) delete process.env.CREDAVER_AUTHORITY_SECRET_KEY; else process.env.CREDAVER_AUTHORITY_SECRET_KEY = origAuthority;
+      if (origReceiptAuth === undefined) delete process.env.RECEIPT_AUTHORITY_SECRET_KEY; else process.env.RECEIPT_AUTHORITY_SECRET_KEY = origReceiptAuth;
+      if (origAnchor === undefined) delete process.env.ANCHOR_SECRET_KEY; else process.env.ANCHOR_SECRET_KEY = origAnchor;
+      if (origAnchorPayer === undefined) delete process.env.ANCHOR_PAYER_SECRET_KEY; else process.env.ANCHOR_PAYER_SECRET_KEY = origAnchorPayer;
+      if (origAnchorOnChain === undefined) delete process.env.ANCHOR_ON_CHAIN; else process.env.ANCHOR_ON_CHAIN = origAnchorOnChain;
     }
+  });
+
+  it('8. (a) sign by hash finds the mandate without client mandate payload', async () => {
+    const store = getServerStore();
+    const mandate = issueSignedMandate(
+      {
+        mandateId: 'mandate-hash-lookup-1',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: [merchant.publicKey],
+        allowedAssets: [USDC_ASSET],
+        maxPerTx: '2000000',
+        totalCap: '10000000',
+        validFrom: Date.now() - 1000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-hash-${Date.now()}`,
+        network: NETWORK,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+
+    const now = Date.now();
+    const proof = createSignedPaymentProof(
+      {
+        mandateHash: mandate.mandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: USDC_ASSET,
+        amount: '1000000',
+        audience: 'http://localhost:4020/api/weather',
+        network: NETWORK,
+        nonce: `nonce-${now}-hash-lookup`,
+        timestamp: now,
+        expiresAt: now + 300000,
+      },
+      agent.secretKey
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mandateHash: mandate.mandateHash,
+        proof,
+        transactionMessageBytes: Buffer.from(new Uint8Array([1, 2, 3])).toString('base64'),
+        // No client mandate payload! Must be resolved from store by hash.
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.decision).toBe('ALLOW');
+    expect(data.receipt.mandateHash).toBe(mandate.mandateHash);
+  });
+
+  it('9. (b) revoked mandate stays revoked even if the client re-sends the mandate payload', async () => {
+    const store = getServerStore();
+    const mandate = issueSignedMandate(
+      {
+        mandateId: 'mandate-tamper-revocation',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: [merchant.publicKey],
+        allowedAssets: [USDC_ASSET],
+        maxPerTx: '2000000',
+        totalCap: '10000000',
+        validFrom: Date.now() - 1000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-rev-${Date.now()}`,
+        network: NETWORK,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+
+    // Operator revokes mandate in store
+    await store.revokeMandate(mandate.mandateId, 'Operator revoked via console');
+
+    const now = Date.now();
+    const proof = createSignedPaymentProof(
+      {
+        mandateHash: mandate.mandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: USDC_ASSET,
+        amount: '1000000',
+        audience: 'http://localhost:4020/api/weather',
+        network: NETWORK,
+        nonce: `nonce-${now}-tamper-rev`,
+        timestamp: now,
+        expiresAt: now + 300000,
+      },
+      agent.secretKey
+    );
+
+    // Client maliciously sends un-revoked mandate payload (revoked: false)
+    const req = new NextRequest('http://localhost:3000/api/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mandateHash: mandate.mandateHash,
+        proof,
+        transactionMessageBytes: Buffer.from(new Uint8Array([1, 2, 3])).toString('base64'),
+        mandate: {
+          ...mandate,
+          revoked: false,
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.decision).toBe('DENY');
+    expect(data.reasonCodes).toContain(ReasonCode.REVOKED_MANDATE);
+
+    // Verify stored mandate was NOT overwritten
+    const stored = await store.getMandate(mandate.mandateId);
+    expect(stored?.revoked).toBe(true);
+  });
+
+  it('10. (c) Phantom-style mandate -> ALLOW -> spend increases', async () => {
+    const store = getServerStore();
+    const mandate = issueSignedMandate(
+      {
+        mandateId: 'mandate-spend-inc-1',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: ['*'],
+        allowedAssets: [USDC_ASSET],
+        maxPerTx: '2000000', // $2.00 max per tx
+        totalCap: '5000000', // $5.00 total cap
+        validFrom: Date.now() - 1000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-spend-${Date.now()}`,
+        network: NETWORK,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+
+    const initialSpend = await store.getMandateSpend(mandate.mandateId);
+    expect(initialSpend).toBe(0n);
+
+    const now = Date.now();
+    const proof = createSignedPaymentProof(
+      {
+        mandateHash: mandate.mandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: USDC_ASSET,
+        amount: '1000000', // $1.00 USDC
+        audience: 'http://localhost:4020/api/weather',
+        network: NETWORK,
+        nonce: `nonce-${now}-spend-inc`,
+        timestamp: now,
+        expiresAt: now + 300000,
+      },
+      agent.secretKey
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mandateHash: mandate.mandateHash,
+        proof,
+        transactionMessageBytes: Buffer.from(new Uint8Array([1, 2, 3])).toString('base64'),
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.decision).toBe('ALLOW');
+
+    // Spend should now be exactly 1,000,000 base units ($1.00)
+    const updatedSpend = await store.getMandateSpend(mandate.mandateId);
+    expect(updatedSpend).toBe(1000000n);
+  });
+
+  it('11. (d) over-cap -> DENY AMOUNT_EXCEEDS_CAP', async () => {
+    const store = getServerStore();
+    const mandate = issueSignedMandate(
+      {
+        mandateId: 'mandate-overcap-1',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: ['*'],
+        allowedAssets: [USDC_ASSET],
+        maxPerTx: '15000000', // $15.00 max per tx (higher than total cap to isolate AMOUNT_EXCEEDS_CAP)
+        totalCap: '5000000', // $5.00 total cap
+        validFrom: Date.now() - 1000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-overcap-${Date.now()}`,
+        network: NETWORK,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+
+    const now = Date.now();
+    const proof = createSignedPaymentProof(
+      {
+        mandateHash: mandate.mandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: USDC_ASSET,
+        amount: '10000000', // $10.00 USDC exceeds $5.00 cap
+        audience: 'http://localhost:4020/api/weather',
+        network: NETWORK,
+        nonce: `nonce-${now}-overcap`,
+        timestamp: now,
+        expiresAt: now + 300000,
+      },
+      agent.secretKey
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mandateHash: mandate.mandateHash,
+        proof,
+        transactionMessageBytes: Buffer.from(new Uint8Array([1, 2, 3])).toString('base64'),
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.decision).toBe('DENY');
+    expect(data.reasonCodes).toContain(ReasonCode.AMOUNT_EXCEEDS_CAP);
+  });
+
+  it('12. (e) revoked -> DENY REVOKED_MANDATE', async () => {
+    const store = getServerStore();
+    const mandate = issueSignedMandate(
+      {
+        mandateId: 'mandate-revoked-direct',
+        operatorPubkey: operator.publicKey,
+        agentPubkey: agent.publicKey,
+        allowedMerchants: ['*'],
+        allowedAssets: [USDC_ASSET],
+        maxPerTx: '5000000',
+        totalCap: '10000000',
+        validFrom: Date.now() - 1000,
+        expiresAt: Date.now() + 3600000,
+        nonce: `nonce-revoked-direct-${Date.now()}`,
+        network: NETWORK,
+      },
+      operator.secretKey,
+      agent.secretKey
+    );
+    await store.saveMandate(mandate);
+    await store.revokeMandate(mandate.mandateId, 'Operator revoked');
+
+    const now = Date.now();
+    const proof = createSignedPaymentProof(
+      {
+        mandateHash: mandate.mandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: merchant.publicKey,
+        asset: USDC_ASSET,
+        amount: '1000000',
+        audience: 'http://localhost:4020/api/weather',
+        network: NETWORK,
+        nonce: `nonce-${now}-revoked-direct`,
+        timestamp: now,
+        expiresAt: now + 300000,
+      },
+      agent.secretKey
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mandateHash: mandate.mandateHash,
+        proof,
+        transactionMessageBytes: Buffer.from(new Uint8Array([1, 2, 3])).toString('base64'),
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.decision).toBe('DENY');
+    expect(data.reasonCodes).toContain(ReasonCode.REVOKED_MANDATE);
   });
 });

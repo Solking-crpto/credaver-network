@@ -112,7 +112,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
@@ -172,7 +173,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
@@ -234,7 +236,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
@@ -299,7 +302,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
@@ -360,7 +364,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
@@ -432,7 +437,8 @@ export async function POST(req: NextRequest) {
         },
         operator.secretKey,
         agent.secretKey,
-        sessionId
+        sessionId,
+        'demo'
       );
       await store.saveMandate(mandate);
 
