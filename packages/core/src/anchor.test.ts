@@ -315,5 +315,129 @@ describe('Milestone 4: Solana Devnet Memo Anchoring & Verification', () => {
       expect(verification.badges.authorityValid).toBe(true); // Signature valid for the random key, but not the authority!
       expect(verification.error).toContain('UNKNOWN SIGNER');
     });
+
+    it('verifies onChain.isValid === true when verifyCompleteReceipt encounters a valid on-chain memo', async () => {
+      const configuredAuthority = generateEd25519Keypair();
+      const body: ReceiptBody = {
+        receiptId: 'rcpt-test-anchored-valid',
+        mandateHash: sampleMandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: 'MerchantAddress111111111111111111111111111',
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: 'nonce-anchored-valid',
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: configuredAuthority.publicKey,
+      };
+
+      const receipt = issueSignedReceipt(body, configuredAuthority.secretKey);
+      receipt.onChainTxSignature = '5MockValidTxSignature123456789abcdef';
+
+      const mockTx = {
+        slot: 506955056,
+        blockTime: 1727950000,
+        transaction: {
+          message: {
+            instructions: [
+              {
+                program: 'spl-memo',
+                programId: SPL_MEMO_PROGRAM_ID,
+                parsed: `credav:1:${sampleMandateHash.slice(0, 8)}:${receipt.receiptHash}:ALLOW`,
+              },
+            ],
+          },
+        },
+      };
+
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: 1, result: mockTx }),
+      })) as any;
+
+      try {
+        const verification = await verifyCompleteReceipt(receipt, {
+          verifyOnChain: true,
+          configuredAuthorityPubkey: configuredAuthority.publicKey,
+        });
+
+        expect(verification.isValid).toBe(true);
+        expect(verification.badges.onChainAnchored).toBe(true);
+        expect(verification.badges.onChainVerified).toBe(true);
+        expect(verification.onChain).toBeDefined();
+        expect(verification.onChain?.isValid).toBe(true);
+        expect(verification.onChain?.slot).toBe(506955056);
+        expect(verification.onChain?.parsedMemo?.receiptHash).toBe(receipt.receiptHash);
+        expect(verification.onChain?.parsedMemo?.decision).toBe('ALLOW');
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
+
+    it('returns onChain.isValid === false when verifyCompleteReceipt encounters a hash mismatch on-chain', async () => {
+      const configuredAuthority = generateEd25519Keypair();
+      const body: ReceiptBody = {
+        receiptId: 'rcpt-test-anchored-mismatch',
+        mandateHash: sampleMandateHash,
+        agentPubkey: agent.publicKey,
+        merchantPubkey: 'MerchantAddress111111111111111111111111111',
+        asset: 'USDC',
+        amount: '1000000',
+        network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+        nonce: 'nonce-anchored-mismatch',
+        decision: 'ALLOW',
+        reasonCodes: ['POLICY_PASSED_ALL_GATES'],
+        policyVersion: 'credav-v1.0',
+        issuedAt: Date.now(),
+        authorityPubkey: configuredAuthority.publicKey,
+      };
+
+      const receipt = issueSignedReceipt(body, configuredAuthority.secretKey);
+      receipt.onChainTxSignature = '5MockMismatchTxSignature123456789abcdef';
+
+      const wrongHash = 'e'.repeat(64);
+      const mockTx = {
+        slot: 506955056,
+        blockTime: 1727950000,
+        transaction: {
+          message: {
+            instructions: [
+              {
+                program: 'spl-memo',
+                programId: SPL_MEMO_PROGRAM_ID,
+                parsed: `credav:1:${sampleMandateHash.slice(0, 8)}:${wrongHash}:ALLOW`,
+              },
+            ],
+          },
+        },
+      };
+
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: 1, result: mockTx }),
+      })) as any;
+
+      try {
+        const verification = await verifyCompleteReceipt(receipt, {
+          verifyOnChain: true,
+          configuredAuthorityPubkey: configuredAuthority.publicKey,
+        });
+
+        expect(verification.isValid).toBe(false);
+        expect(verification.badges.onChainAnchored).toBe(true);
+        expect(verification.badges.onChainVerified).toBe(false);
+        expect(verification.onChain).toBeDefined();
+        expect(verification.onChain?.isValid).toBe(false);
+        expect(verification.onChain?.error).toContain('Receipt hash mismatch');
+        expect(verification.error).toContain('On-chain SPL Memo verification failed');
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+    });
   });
 });

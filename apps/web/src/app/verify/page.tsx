@@ -611,37 +611,111 @@ function VerifyContent() {
               </div>
 
               {/* Row 3: On-Chain SPL Memo Anchor */}
-              <div className="p-4 rounded-xl bg-surface/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-                <div className="flex items-center gap-3">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                    result.onChain?.isValid ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'
-                  }`}>
-                    <FileCheck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-slate-400 uppercase text-[10px] tracking-wider">Row 3: On-Chain Memo Anchor</div>
-                    <div className="text-white font-semibold">Solana Devnet Memo Verification</div>
-                  </div>
-                </div>
+              {(() => {
+                const receiptObj = result.receipt || result.linkedReceipt;
+                const decision = receiptObj?.decision;
+                const hasAnchorTx = Boolean(result.onChain?.txSignature || receiptObj?.onChainTxSignature);
+                const isAnchored = result.badges?.onChainAnchored !== undefined && result.badges.onChainAnchored !== null
+                  ? result.badges.onChainAnchored
+                  : hasAnchorTx;
+                const isVerified = Boolean(result.onChain?.isValid === true || result.badges?.onChainVerified === true);
+                const isPropagating = Boolean(
+                  isAnchored &&
+                    !isVerified &&
+                    result.onChain?.error &&
+                    (result.onChain.error.includes('not found') || result.onChain.error.includes('propagating'))
+                );
+                const isAnchorFailed = Boolean(isAnchored && !isVerified && !isPropagating);
+                const isNotAnchored = !isAnchored || result.badges?.onChainAnchored === false;
+                const explorerUrl =
+                  result.onChain?.explorerUrl ||
+                  (result.onChain?.txSignature
+                    ? `https://explorer.solana.com/tx/${result.onChain.txSignature}?cluster=devnet`
+                    : null);
 
-                <div className="flex items-center gap-2">
-                  {result.onChain?.isValid ? (
-                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Verified On-Chain {result.onChain.slot ? `(Slot #${result.onChain.slot})` : ''}</span>
-                    </span>
-                  ) : result.badges?.onChainAnchored === false ? (
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <span>○ Off-Chain Receipt Only</span>
-                    </span>
-                  ) : (
-                    <span className="text-amber-400 flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Pending / Unanchored</span>
-                    </span>
-                  )}
-                </div>
-              </div>
+                return (
+                  <div className="p-4 rounded-xl bg-surface/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                          isVerified
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : isAnchorFailed
+                            ? 'bg-rose-500/15 text-rose-400'
+                            : isPropagating
+                            ? 'bg-amber-500/15 text-amber-400'
+                            : 'bg-slate-500/15 text-slate-400'
+                        }`}
+                      >
+                        <FileCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-slate-400 uppercase text-[10px] tracking-wider">
+                          Row 3: On-Chain Memo Anchor
+                        </div>
+                        <div className="text-white font-semibold">Solana Devnet Memo Verification</div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:items-end gap-1">
+                      {isVerified ? (
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              Verified On-Chain {result.onChain?.slot ? `(Slot #${result.onChain.slot})` : ''}
+                            </span>
+                          </span>
+                          {explorerUrl && (
+                            <a
+                              href={explorerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-cyan-400 hover:text-cyan-300 underline flex items-center gap-1 ml-1"
+                            >
+                              <span>Explorer</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      ) : isAnchorFailed ? (
+                        <div className="space-y-0.5 text-left sm:text-right">
+                          <span className="text-rose-400 font-bold flex items-center sm:justify-end gap-1">
+                            <XCircle className="w-4 h-4" />
+                            <span>Anchor mismatch</span>
+                          </span>
+                          {result.onChain?.error && (
+                            <p className="text-[11px] text-rose-400/90 max-w-sm">
+                              {result.onChain.error}
+                            </p>
+                          )}
+                        </div>
+                      ) : isPropagating ? (
+                        <div className="space-y-0.5 text-left sm:text-right">
+                          <span className="text-amber-400 font-bold flex items-center sm:justify-end gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>Pending / Propagating</span>
+                          </span>
+                          <p className="text-[11px] text-amber-400/80 max-w-sm">
+                            {result.onChain?.error || 'Transaction not found on devnet (may still be propagating)'}
+                          </p>
+                        </div>
+                      ) : isNotAnchored ? (
+                        <div className="space-y-0.5 text-left sm:text-right">
+                          <span className="text-slate-400 flex items-center sm:justify-end gap-1">
+                            <span>○ Not anchored on-chain</span>
+                          </span>
+                          {(decision === 'DENY' || decision === 'REVIEW') && (
+                            <p className="text-[11px] text-slate-400 max-w-sm">
+                              Only ALLOW receipts are anchored on-chain; this receipt is still signed by the CredaVer authority.
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </Card>
 

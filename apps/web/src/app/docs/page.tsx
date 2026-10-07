@@ -217,7 +217,7 @@ export default function DocsPage() {
           <div className="p-4 rounded-xl bg-surface border border-border/60 space-y-2 font-mono text-xs">
             <div className="text-cyan-300 font-semibold">SPL Memo On-Chain Anchoring Format:</div>
             <code className="text-slate-300 block bg-surface-card p-3 rounded-lg border border-border/40 overflow-x-auto">
-              credav:v1:&lt;mandateHashPrefix&gt;:&lt;receiptHash&gt;:&lt;ALLOW|DENY|REVIEW&gt;
+              credav:1:&lt;mandateHashFirst8&gt;:&lt;receiptHash&gt;:&lt;decision&gt;
             </code>
             <p className="text-slate-400 text-[11px] pt-1">
               Anchored transactions write the memo to Solana Devnet via the SPL Memo Program (<code className="text-slate-300">MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr</code>). Anyone can verify the memo block time, slot, and hash match without trusting CredaVer servers.

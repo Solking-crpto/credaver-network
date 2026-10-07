@@ -319,10 +319,13 @@ export interface CompleteReceiptVerificationResult {
     onChainVerified: boolean | null;
   };
   onChain?: {
+    isValid: boolean;
+    error?: string;
     txSignature: string;
     slot?: number;
     blockTime?: number | null;
     memoPayload?: string;
+    parsedMemo?: ParsedMemoPayload;
     explorerUrl: string;
   };
 }
@@ -400,10 +403,13 @@ export async function verifyCompleteReceipt(
     const onChainResult = await verifyOnChainMemo(receipt.onChainTxSignature!, receipt.receiptHash, rpcUrl);
     onChainVerified = onChainResult.isValid;
     onChainDetails = {
+      isValid: onChainResult.isValid,
+      error: onChainResult.error,
       txSignature: receipt.onChainTxSignature!,
       slot: onChainResult.slot,
       blockTime: onChainResult.blockTime,
       memoPayload: onChainResult.memoPayload,
+      parsedMemo: onChainResult.parsedMemo,
       explorerUrl: `https://explorer.solana.com/tx/${receipt.onChainTxSignature}?cluster=devnet`,
     };
   }
