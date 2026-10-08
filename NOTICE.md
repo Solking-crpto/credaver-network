@@ -8,7 +8,9 @@ In accordance with Section 9 of the Crypto World's Fair Official Rules (Colosseu
 - **Branch**: `envio`
 - **Source Commit Hash**: `3540f9d`
 - **Author**: Tochukwu SN (`Solking-crpto`)
-- **License**: MIT / Proprietary hackathon draft
+- **License**: MIT
+
+VeriqoMesh is a separate earlier project by the same author. It is not entered in this hackathon. No contracts, chain config, brand assets, audio or video from it are reused.
 
 ---
 
@@ -62,3 +64,37 @@ The following modules from VeriqoMesh are **NEVER** copied into CredaVer Network
 - Multi-judge human consensus mechanisms and basis-point split calculations.
 - VeriqoMesh brand marks, logos, icons, audio, and pitch video recordings.
 - Legacy EVM test fixtures and sample IDs (`VM-T564-24CG`, etc.).
+
+---
+
+## 4. Third-Party Open-Source Libraries
+
+The following open-source dependencies are utilized in CredaVer Network (licenses verified directly against respective package manifests):
+
+| Package | Version | License | Role |
+|---|---|---|---|
+| `@x402/core` | `2.28.0` | Apache-2.0 | Official x402 payment protocol definitions & schemas |
+| `@x402/fetch` | `2.28.0` | Apache-2.0 | Official x402 client fetch wrapper |
+| `@x402/svm` | `2.28.0` | Apache-2.0 | Official SVM payment scheme implementation |
+| `@x402/express` | `2.28.0` | Apache-2.0 | Official Express middleware for 402 payment challenges |
+| `@solana/kit` | `5.5.1` | MIT | Solana cryptographic primitives, keypairs & transaction wire format |
+| `@wallet-standard/base` | `1.1.1` | Apache-2.0 | Standard wallet interface specifications |
+| `@wallet-standard/app` | `1.1.1` | Apache-2.0 | Standard wallet detection and connection |
+| `next` | `15.1.0` | MIT | React full-stack application framework |
+| `react` / `react-dom` | `19.0.0` | MIT | User interface rendering engine |
+| `tailwindcss` | `3.4.17` | MIT | Utility-first CSS framework |
+| `zod` | `3.24.1` | MIT | Runtime schema validation |
+| `canonicalize` | `2.1.0` | Apache-2.0 | RFC 8785 JSON Canonicalization Scheme (JCS) |
+| `express` | `4.21.2` | MIT | Demo resource merchant HTTP server |
+| `vitest` | `3.0.5` | MIT | Unit and integration test runner |
+| `lucide-react` | `0.475.0` | ISC | Icon system |
+| `clsx` / `tailwind-merge` | `2.1.1` / `2.5.4` | MIT | ClassName resolution utilities |
+
+*Note on Upstash Redis*: Persistence utilizes a native, zero-dependency HTTP client communicating over the standard Upstash Redis REST protocol via global `fetch`.
+
+---
+
+## 5. AI Assistance Disclosure
+
+Built with AI assistance: **Claude** (research, review, copy) and **Google Antigravity** (code), directed and reviewed by the founder.  
+First commit: **Oct 2, 2026** (built during the hackathon).

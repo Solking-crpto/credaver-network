@@ -7,19 +7,23 @@ CredaVer uses **Vitest** for deterministic, sub-second test execution across all
 | Package / App | Test File | Tests Run | Result | Key Invariants Verified |
 |---|---|---|---|---|
 | `@credaver/core` | `packages/core/src/core.test.ts` | 34 | **PASS** | RFC 8785 JCS canonicalization, Ed25519 keypair generation, Base58 encode/decode, Mandate mutual signing/verification, Request-bound proofs, 12 Policy Engine gates (ALLOW, DENY reason codes, REVIEW thresholds), Sequential Replay, Concurrent Atomic Replay Race (Promise.all), and 13 boundary tests. |
-| `@credaver/core` | `packages/core/src/state-machine.test.ts` | 16 | **PASS** | **Milestone 3 State Machines & Audit Log**: Mandate lifecycle (`DRAFT` -> `ACTIVE` -> `REVOKED` | `EXPIRED` | `DEPLETED`), disallowed transitions throwing `InvalidStateTransitionError`, Request lifecycle, 14 standardized reason codes, and chronological audit trail. |
-| `@credaver/core` | `packages/core/src/anchor.test.ts` | 11 | **PASS** | **Milestone 4 On-Chain Memo Anchoring**: SPL Memo payload assembly (`credav:1:...`), wire transaction serializer, Devnet RPC memo extraction, and complete multi-badge receipt verification. |
+| `@credaver/core` | `packages/core/src/state-machine.test.ts` | 16 | **PASS** | **Milestone 3 State Machines & Audit Log**: Mandate lifecycle (`DRAFT` -> `ACTIVE` -> `REVOKED` \| `EXPIRED` \| `DEPLETED`), disallowed transitions throwing `InvalidStateTransitionError`, Request lifecycle, 14 standardized reason codes, and chronological audit trail. |
+| `@credaver/core` | `packages/core/src/anchor.test.ts` | 15 | **PASS** | **Milestone 4 On-Chain Memo Anchoring**: SPL Memo payload assembly (`credav:1:...`), wire transaction serializer, Devnet RPC memo extraction, complete multi-badge receipt verification, valid memo verification (`onChain.isValid === true`), and hash mismatch rejection. |
 | `@credaver/core` | `packages/core/src/persistence.test.ts` | 4 | **PASS** | **Milestone 2 Dual Adapters & Lifecycle**: In-memory and Redis REST CRUD, mandate revocation immediate policy rejection (`REVOKED_MANDATE`), receipt filtering, audit log, and atomic `SET NX EX` concurrency race. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/guard.test.ts` | 5 | **PASS** | `createCredaverClientPolicy` filter for `x402Client.registerPolicy()`, enforcement of allowed assets/merchants/networks/caps, `CredaverAgentGuard` pre-authorization flow, and cumulative spend ledger tracking. |
 | `@credaver/x402-guard` | `packages/x402-guard/src/constrained-signer.test.ts` | 5 | **PASS** | **Milestone 1 Constrained Signer Spike S5**: Agent zero-key custody proof, `@solana/kit` partial signing delegation, policy-gated signing, cap violation rejection, unlisted merchant rejection, review threshold gate, and cryptographic proof that agent cannot self-sign. |
-| `apps/web` | `apps/web/src/scenarios-api.test.ts` | 9 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), live Devnet settlement scenario (`REAL_DEVNET`), latency measurement, and operator review approval/rejection endpoints. |
-| `apps/web` | `apps/web/src/verify-api.test.ts` | 7 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, authority verification, and 404/400 handling. |
-| `apps/web` | `apps/web/src/mandates-api.test.ts` | 7 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, `GET /api/receipts/[id]`, **Phantom readable message verification (`CredaVer Mandate v1\n`)**, **wrong signer rejection**, and **tampered fields rejection**. |
-| `apps/web` | `apps/web/src/sign-api.test.ts` | 7 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, 202 REVIEW with pending audit receipt, **production fail-loud enforcement without Redis credentials**, and **sliding-window rate limiting with 429 response**. |
+| `apps/web` | `apps/web/src/sign-api.test.ts` | 12 | **PASS** | **Next.js `POST /api/sign` endpoint**: Full request validation, policy evaluation, 200 ALLOW with transaction signature, 403 DENY with reason code, 202 REVIEW with pending audit receipt, production fail-loud enforcement without Redis credentials, sliding-window rate limiting, mandateHash index lookup, overwrite protection on client resubmit, spend tracking, and revocation enforcement. |
+| `apps/web` | `apps/web/src/scenarios-api.test.ts` | 12 | **PASS** | **Milestone 5 Interactive Scenarios & Reviews**: All 6 policy test scenarios (`ALLOW`, `OVER_CAP`, `REVOKED`, `EXPIRED`, `REPLAY`, `REVIEW`), live Devnet settlement scenario (`REAL_DEVNET`), latency measurement, operator review approval/rejection endpoints, and settlement integrity spend reversal. |
+| `apps/web` | `apps/web/src/wallet-standard.test.ts` | 11 | **PASS** | Wallet Standard feature detection, mock adapter connect/disconnect, message signing, and error handling. |
+| `apps/web` | `apps/web/src/verify-api.test.ts` | 9 | **PASS** | **Milestone 4 Verification Portal API**: `GET /api/verify` and `POST /api/verify` with receipt JSON and transaction signature lookup, badge resolution, authority verification, tampered receipt detection, and 404/400 handling. |
+| `scripts` | `scripts/transfer-devnet-sol.test.ts` | 9 | **PASS** | CLI devnet transfer parameter validation, dry-run mode, balance checks, and security guardrails. |
+| `apps/web` | `apps/web/src/mandates-api.test.ts` | 7 | **PASS** | **Milestone 2 Mandates & Receipts REST Routes**: `POST /api/mandates`, `GET /api/mandates`, `GET /api/mandates/[id]`, `POST /api/mandates/[id]/revoke`, `GET /api/receipts`, `GET /api/receipts/[id]`, Phantom readable message verification (`CredaVer Mandate v1\n`), wrong signer rejection, and tampered fields rejection. |
+| `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and rejection of startup on facilitator sync failure. |
+| `apps/web` | `apps/web/src/early-access-api.test.ts` | 4 | **PASS** | `POST /api/early-access` email and persona validation, sanitization, rate limiting, and audit store persistence. |
 | `apps/web` | `apps/web/src/wallet.test.ts` | 4 | **PASS** | Phantom Connect / Wallet Standard challenge generation, Ed25519 challenge signing, server-side signature verification, imposter key rejection, and challenge tampering rejection. |
-| `apps/demo-merchant` | `apps/demo-merchant/src/merchant.test.ts` | 5 | **PASS** | Express server initialization on ephemeral port, free health route, 402 `PAYMENT-REQUIRED` header generation, full x402 V2 round trip with CredaVer client guard, 200 `PAYMENT-RESPONSE` settlement, unauthorized merchant payment blocking, and **rejection of startup on facilitator sync failure**. |
+| `apps/web` | `apps/web/src/routes-links.test.ts` | 2 | **PASS** | Route & internal link integrity audit across all dedicated routes, and `GET /api/health` 200 operational check. |
 
-**Total Verified Tests**: **116 passing tests across 12 test suites (0 failures, 0 skips)**.
+**Total Verified Tests**: **154 passing tests across 16 test suites (0 failures, 0 skips)**.
 
 ---
 
@@ -173,8 +177,8 @@ Run the test suite:
 pnpm test apps/web/src/scenarios-api.test.ts
 ```
 
-### Dashboard Console Features
-- **URL**: `http://localhost:3000` (`apps/web/src/app/page.tsx`)
+### Console & Scenario Runner Features
+- **Scenarios URL**: `/demo` (`apps/web/src/app/demo/page.tsx`)
 - **6 Key Policy Scenarios Executed via Real Engine**:
   1. `ALLOW`: Normal payment under cap -> signs transaction, records spend progress, emits receipt.
   2. `OVER_CAP`: Requested payment exceeds total cap -> returns 403 `AMOUNT_EXCEEDS_CAP`.
@@ -182,8 +186,8 @@ pnpm test apps/web/src/scenarios-api.test.ts
   4. `EXPIRED`: Payment attempt after validity window -> returns 403 `EXPIRED_MANDATE`.
   5. `REPLAY`: Duplicate nonce transmitted twice -> atomic `SET NX EX` fails closed with 403 `REPLAY_DETECTED`.
   6. `REVIEW`: Payment exceeding review threshold -> returns 202 `AMOUNT_EXCEEDS_REVIEW_THRESHOLD`, held in review queue with live Approve/Reject operator controls.
-- **Active Mandates View**: Connected to `GET /api/mandates`, showing spend progress bar (`spend / cap`), expiry countdown, and interactive Revoke button calling `POST /api/mandates/[id]/revoke`.
-- **Receipts Registry View**: Connected to `GET /api/receipts`, showing live decision chips, reason codes, amounts, timestamps, and 1-click links to the `/verify` verification gateway.
+- **Mandates Management**: Dedicated console at `/mandates` (`apps/web/src/app/mandates/page.tsx`), showing user-issued mandates, spend progress, and instant revocation.
+- **Receipts Registry**: Dedicated ledger at `/receipts` (`apps/web/src/app/receipts/page.tsx`), showing signed decision chips, reason codes, amounts, timestamps, and 1-click links to `/verify`.
 
 
 
