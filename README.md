@@ -13,7 +13,7 @@
 
 - **Production Deployment**: [https://www.credavernetwork.xyz](https://www.credavernetwork.xyz)
 - **Vercel Backup**: [https://credaver-network.vercel.app](https://credaver-network.vercel.app)
-- **Technical Demo Video (3m 0s)**: [https://youtu.be/GwVPDWF0YwA](https://youtu.be/GwVPDWF0YwA)
+- **Technical Demo Video (2m 14s)**: [https://youtu.be/GwVPDWF0YwA](https://youtu.be/GwVPDWF0YwA)
 - **Founder Pitch Video**: [https://www.youtube.com/shorts/KwWjFe-36JE](https://www.youtube.com/shorts/KwWjFe-36JE)
 - **On-Chain Settlement Tx (Devnet)**: [`5SbhMnaU...`](https://explorer.solana.com/tx/5SbhMnaUcDQiQ8aPM8b8oPGWbcUoAeaQEnHvtNdnCqMc97MCEb2GiB1jQLiXwDsjCCaJoYtbrXtFpz65vN4JCzMF?cluster=devnet)
 - **On-Chain SPL Memo Anchor Tx (Devnet)**: [`3qbTwf6Y...`](https://explorer.solana.com/tx/3qbTwf6YAnSjFrkdD85R2C4w16wznA7qkt2hVWR2qxBtqUfBfbjJBxEYuosPY5tkyWhSZivEF3H1QRhDjXgHLwMQ?cluster=devnet) (Slot 506955056)

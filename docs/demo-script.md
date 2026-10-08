@@ -3,7 +3,7 @@
 **Contest**: Crypto World's Fair Hackathon 2026 (Colosseum)  
 **Live Production URL**: [https://www.credavernetwork.xyz](https://www.credavernetwork.xyz) (Backup: [https://credaver-network.vercel.app](https://credaver-network.vercel.app))  
 **Founder Pitch Video**: [https://www.youtube.com/shorts/KwWjFe-36JE](https://www.youtube.com/shorts/KwWjFe-36JE)  
-**Technical Demo Video**: [https://youtu.be/GwVPDWF0YwA](https://youtu.be/GwVPDWF0YwA) (Duration: 3m 0s)  
+**Technical Demo Video**: [https://youtu.be/GwVPDWF0YwA](https://youtu.be/GwVPDWF0YwA) (Duration: 2m 14s)  
 
 > [!NOTE]
 > **Submission Videos Completed**: Both required submission videos have been recorded, verified, and published:
@@ -22,6 +22,8 @@
 | **4. Blocked Over-Cap** | 1:40 - 2:05 | 25s | Policy Gate `OVER_CAP` + Instant 403 DENY |
 | **5. Receipt Verify** | 2:05 - 2:40 | 35s | Public Verification Portal (`/verify`) showing all green badges |
 | **6. Why Solana** | 2:40 - 3:00 | 20s | Final summary: Solana throughput, x402 V2, on-chain proof |
+
+> Timings are approximate; the published video runs 2m 14s.
 
 ---
 
